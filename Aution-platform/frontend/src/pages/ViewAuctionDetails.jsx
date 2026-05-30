@@ -68,9 +68,9 @@ const ViewAuctionDetails = () => {
         {!authChecked || loading ? (
           <Spinner />
         ) : (
-          <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
             <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="grid gap-6 p-5 md:grid-cols-[280px_1fr] md:p-6">
+              <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(220px,0.8fr)_minmax(0,1fr)] lg:p-6">
                 <div className="overflow-hidden rounded-lg bg-slate-100">
                   <img
                     src={auctionDetail.image?.url || "/imageHolder.jpg"}
@@ -78,14 +78,14 @@ const ViewAuctionDetails = () => {
                     className="aspect-[4/3] h-full w-full object-cover"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="inline-flex rounded-md bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700">
                     {status}
                   </span>
                   <h1 className="mt-4 text-3xl font-bold leading-tight text-slate-950 md:text-4xl">
                     {auctionDetail.title}
                   </h1>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <div className="fluid-stat-grid mt-5 grid gap-3">
                     <Info label="Condition" value={auctionDetail.condition || "Not set"} />
                     <Info label="Category" value={auctionDetail.category || "Not set"} />
                     <Info label="Minimum Bid" value={formatCurrency(auctionDetail.startingBid)} />
@@ -168,10 +168,8 @@ const ViewAuctionDetails = () => {
 
 const Info = ({ label, value }) => (
   <div className="rounded-md bg-slate-50 p-3">
-    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-      {label}
-    </p>
-    <p className="mt-1 font-semibold text-slate-950">{value}</p>
+    <p className="stat-label">{label}</p>
+    <p className="stat-value">{value}</p>
   </div>
 );
 

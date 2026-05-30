@@ -74,7 +74,7 @@ const SideDrawer = () => {
         type="button"
         onClick={() => setShow((value) => !value)}
         aria-label="Toggle navigation"
-        className="fixed right-4 top-4 z-50 rounded-md bg-indigo-600 p-2 text-2xl text-white shadow-lg transition hover:bg-indigo-700 sm:right-5 sm:top-5 sm:text-3xl xl:hidden"
+        className="fixed right-4 top-4 z-50 rounded-md bg-indigo-600 p-2 text-2xl text-white shadow-lg transition hover:bg-indigo-700 sm:right-5 sm:top-5 sm:text-3xl 2xl:hidden"
       >
         <GiHamburgerMenu />
       </button>
@@ -84,12 +84,12 @@ const SideDrawer = () => {
           type="button"
           aria-label="Close navigation"
           onClick={() => setShow(false)}
-          className="fixed inset-0 z-30 bg-slate-950/40 xl:hidden"
+          className="fixed inset-0 z-30 bg-slate-950/40 2xl:hidden"
         />
       )}
 
       <aside
-        className={`fixed top-0 z-40 flex h-dvh w-[min(86vw,320px)] flex-col justify-between overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl transition-all duration-200 xl:left-0 xl:w-[300px] xl:shadow-none ${
+        className={`fixed top-0 z-40 flex h-dvh w-[min(86vw,320px)] flex-col justify-between overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl transition-all duration-200 2xl:left-0 2xl:w-[300px] 2xl:shadow-none ${
           show ? "left-0" : "left-[-100%]"
         }`}
       >

@@ -427,7 +427,7 @@ const Wallet = () => {
           <p className="app-kicker">
             Payments
           </p>
-          <h1 className="mt-2 flex items-center gap-3 text-4xl font-bold text-slate-950 md:text-5xl">
+          <h1 className="mt-2 flex items-center gap-3 text-3xl font-bold text-slate-950 sm:text-4xl md:text-5xl">
             <WalletIcon className="h-10 w-10 text-indigo-600" />
             Wallet
           </h1>
@@ -443,10 +443,10 @@ const Wallet = () => {
                   <p className="text-sm font-bold uppercase tracking-[0.16em] text-indigo-600">
                     Wallet Overview
                   </p>
-                  <h2 className="mt-2 text-2xl font-bold text-slate-950 md:text-3xl">
+                  <h2 className="mt-2 max-w-full break-words text-xl font-bold leading-tight text-slate-950 sm:text-2xl md:text-3xl">
                     Track balances, holds, and payout movement from one place.
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm text-slate-500">
+                  <p className="mt-2 max-w-2xl break-words text-sm leading-6 text-slate-500">
                     Available money can be used for bids or withdrawal requests.
                     Locked money stays visible with the auction or payout request
                     holding it.
@@ -1288,9 +1288,9 @@ const FloatingWalletActions = ({ availableBalance, canDeposit, canWithdraw, hidd
   if (hidden || (!canDeposit && !canWithdraw)) return null;
 
   return (
-    <div className="fixed inset-x-4 bottom-4 z-50 xl:left-auto xl:right-6 xl:w-[360px]">
-      <div className="rounded-lg border border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur">
-        <div className="mb-3 flex items-center justify-between gap-3 px-1">
+    <div className="fixed inset-x-3 bottom-3 z-50 sm:inset-x-4 sm:bottom-4 xl:left-auto xl:right-6 xl:w-[360px]">
+      <div className="rounded-lg border border-slate-200 bg-white/95 p-2 shadow-2xl backdrop-blur sm:p-3">
+        <div className="mb-3 hidden items-center justify-between gap-3 px-1 sm:flex">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
               Quick wallet actions
@@ -1311,7 +1311,7 @@ const FloatingWalletActions = ({ availableBalance, canDeposit, canWithdraw, hidd
               type="button"
               onClick={onDeposit}
               aria-label="Deposit money"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 sm:min-h-12 sm:py-3"
             >
               <ArrowDownToLine className="h-5 w-5" />
               Deposit
@@ -1322,7 +1322,7 @@ const FloatingWalletActions = ({ availableBalance, canDeposit, canWithdraw, hidd
               type="button"
               onClick={onWithdraw}
               aria-label="Withdraw money"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-950 px-3 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-slate-200 bg-slate-950 px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 sm:min-h-12 sm:py-3"
             >
               <ArrowUpFromLine className="h-5 w-5" />
               Withdraw

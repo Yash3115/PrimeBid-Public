@@ -126,16 +126,16 @@ const Card = ({
           </h5>
         </Link>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 min-[380px]:grid-cols-2">
             <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
               Current
-              <span className="block truncate text-lg font-bold text-slate-950">
+              <span className="block break-words text-lg font-bold leading-tight text-slate-950">
                 {formatCurrency(latestBid)}
               </span>
             </p>
             <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
               Starting
-              <span className="block truncate text-lg font-bold text-slate-950">
+              <span className="block break-words text-lg font-bold leading-tight text-slate-950">
                 {formatCurrency(startingBid)}
               </span>
             </p>
