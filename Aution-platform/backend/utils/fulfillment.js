@@ -1,0 +1,140 @@
+import Fulfillment from "../models/fulfillmentSchema.js";
+
+export const FULFILLMENT_STATUS = {
+  AWAITING_ADDRESS: "AwaitingAddress",
+  READY_TO_SHIP: "ReadyToShip",
+  SHIPPED: "Shipped",
+  OUT_FOR_DELIVERY: "OutForDelivery",
+  DELIVERED: "Delivered",
+  ISSUE_REPORTED: "IssueReported",
+};
+
+export const sellerManagedStatuses = [
+  FULFILLMENT_STATUS.SHIPPED,
+  FULFILLMENT_STATUS.OUT_FOR_DELIVERY,
+  FULFILLMENT_STATUS.DELIVERED,
+  FULFILLMENT_STATUS.ISSUE_REPORTED,
+];
+
+const cleanString = (value, max = 160) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, max);
+
+const requiredAddressFields = [
+  "fullName",
+  "phone",
+  "addressLine1",
+  "city",
+  "state",
+  "postalCode",
+];
+
+export const normalizeDeliveryAddress = (input = {}) => {
+  const address = {
+    fullName: cleanString(input.fullName, 80),
+    phone: cleanString(input.phone, 20),
+    addressLine1: cleanString(input.addressLine1, 180),
+    addressLine2: cleanString(input.addressLine2, 180),
+    city: cleanString(input.city, 80),
+    state: cleanString(input.state, 80),
+    postalCode: cleanString(input.postalCode, 16).toUpperCase(),
+    country: cleanString(input.country || "India", 80),
+    instructions: cleanString(input.instructions, 500),
+  };
+
+  const missing = requiredAddressFields.filter((field) => !address[field]);
+  if (missing.length > 0) {
+    const err = new Error(`Delivery address missing: ${missing.join(", ")}`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const phoneDigits = address.phone.replace(/\D/g, "");
+  if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+    const err = new Error("Delivery phone number must contain 7 to 15 digits");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (address.postalCode.length < 3) {
+    const err = new Error("Delivery postal code is too short");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return address;
+};
+
+export const getFulfillmentProgress = (status) => {
+  const steps = [
+    FULFILLMENT_STATUS.AWAITING_ADDRESS,
+    FULFILLMENT_STATUS.READY_TO_SHIP,
+    FULFILLMENT_STATUS.SHIPPED,
+    FULFILLMENT_STATUS.OUT_FOR_DELIVERY,
+    FULFILLMENT_STATUS.DELIVERED,
+  ];
+  const currentIndex = steps.indexOf(status);
+  return {
+    steps,
+    currentIndex: currentIndex >= 0 ? currentIndex : 0,
+    isIssue: status === FULFILLMENT_STATUS.ISSUE_REPORTED,
+  };
+};
+
+export const buildTimelineEntry = ({
+  status,
+  title,
+  message,
+  actor,
+  actorRole = "System",
+}) => ({
+  status,
+  title,
+  message,
+  actor,
+  actorRole,
+  createdAt: new Date(),
+});
+
+export const ensureFulfillmentForAuction = async ({
+  auction,
+  bid,
+  bidderId,
+  sellerId,
+  winningAmount,
+  settlementStatus = "WalletCaptured",
+}) => {
+  const existing = await Fulfillment.findOne({ auction: auction._id });
+  if (existing) {
+    return { fulfillment: existing, created: false };
+  }
+
+  try {
+    const fulfillment = await Fulfillment.create({
+      auction: auction._id,
+      bidder: bidderId,
+      seller: sellerId,
+      winningBid: bid?._id,
+      winningAmount: Number(winningAmount || bid?.amount || auction.currentBid || 0),
+      settlementStatus,
+      status: FULFILLMENT_STATUS.AWAITING_ADDRESS,
+      timeline: [
+        buildTimelineEntry({
+          status: FULFILLMENT_STATUS.AWAITING_ADDRESS,
+          title: "Delivery address requested",
+          message: "The auction has closed. The winner needs to add delivery details before the seller can ship.",
+        }),
+      ],
+    });
+
+    return { fulfillment, created: true };
+  } catch (error) {
+    if (error?.code === 11000) {
+      const fulfillment = await Fulfillment.findOne({ auction: auction._id });
+      if (fulfillment) return { fulfillment, created: false };
+    }
+    throw error;
+  }
+};

@@ -1,0 +1,106 @@
+import mongoose from "mongoose";
+
+const deliveryAddressSchema = new mongoose.Schema(
+  {
+    fullName: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    addressLine1: { type: String, trim: true },
+    addressLine2: { type: String, trim: true },
+    city: { type: String, trim: true },
+    state: { type: String, trim: true },
+    postalCode: { type: String, trim: true },
+    country: { type: String, trim: true, default: "India" },
+    instructions: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
+const timelineSchema = new mongoose.Schema(
+  {
+    status: String,
+    title: String,
+    message: String,
+    actor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    actorRole: {
+      type: String,
+      enum: ["Bidder", "Auctioneer", "System", "Super Admin"],
+      default: "System",
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
+const fulfillmentSchema = new mongoose.Schema(
+  {
+    auction: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Auction",
+      required: true,
+      unique: true,
+    },
+    bidder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    seller: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    winningBid: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Bid",
+    },
+    winningAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    settlementStatus: {
+      type: String,
+      enum: ["WalletCaptured", "NeedsReview"],
+      default: "WalletCaptured",
+    },
+    status: {
+      type: String,
+      enum: [
+        "AwaitingAddress",
+        "ReadyToShip",
+        "Shipped",
+        "OutForDelivery",
+        "Delivered",
+        "IssueReported",
+      ],
+      default: "AwaitingAddress",
+    },
+    deliveryAddress: deliveryAddressSchema,
+    addressSubmittedAt: Date,
+    shipping: {
+      carrier: { type: String, trim: true },
+      trackingNumber: { type: String, trim: true },
+      trackingUrl: { type: String, trim: true },
+      estimatedDeliveryDate: Date,
+      sellerNote: { type: String, trim: true },
+      shippedAt: Date,
+      deliveredAt: Date,
+    },
+    timeline: [timelineSchema],
+  },
+  { timestamps: true }
+);
+
+fulfillmentSchema.index({ bidder: 1, updatedAt: -1 });
+fulfillmentSchema.index({ seller: 1, status: 1, updatedAt: -1 });
+fulfillmentSchema.index({ auction: 1, bidder: 1 });
+
+const Fulfillment = mongoose.model("Fulfillment", fulfillmentSchema);
+
+export default Fulfillment;
