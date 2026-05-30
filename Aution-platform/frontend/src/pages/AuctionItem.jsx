@@ -4,7 +4,12 @@ import {
   getBidderAuctionLock,
   getBidWalletRequirement,
 } from "@/lib/bidWallet";
-import { formatCurrency, formatDateTime, getAuctionStatus } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDateTime,
+  formatSellerRating,
+  getAuctionStatus,
+} from "@/lib/format";
 import {
   getAuctionDetail,
   getBidAdvice,
@@ -294,7 +299,7 @@ const AuctionItem = () => {
                     <Info label="Current Bid" value={formatCurrency(currentBid)} />
                     <Info label="Bid Increment" value={formatCurrency(bidIncrement)} />
                     <Info label="Extension" value={`${auctionDetail.antiSnipingExtensionMinutes || 0} min`} />
-                    <Info label="Seller Rating" value={`${auctionDetail.createdBy?.reputation?.ratingAverage || 0}/5`} />
+                    <Info label="Seller Rating" value={formatSellerRating(auctionDetail.createdBy?.reputation)} />
                     <Info label="Starts" value={formatDateTime(auctionDetail.startTime)} />
                     <Info label="Ends" value={formatDateTime(auctionDetail.endTime)} />
                   </div>

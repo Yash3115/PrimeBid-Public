@@ -4,7 +4,12 @@ import {
   getFulfillmentLabel,
   getFulfillmentTone,
 } from "@/lib/fulfillment";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDateTime,
+  formatReviewCount,
+  formatSellerRating,
+} from "@/lib/format";
 import { reviewSeller } from "@/store/slices/auctionSlice";
 import {
   fetchWonAuctions,
@@ -107,6 +112,10 @@ const WonAuctionCard = ({ auction, currentUser }) => {
   const fulfillmentStatus = fulfillment?.status || "AwaitingAddress";
   const addressIsEditable = canEditDeliveryAddress(fulfillmentStatus);
   const hasAddress = Boolean(fulfillment?.deliveryAddress?.addressLine1);
+  const sellerRating = formatSellerRating(
+    seller.ratingAverage,
+    seller.ratingCount
+  );
 
   useEffect(() => {
     setAddressForm(buildAddressForm(auction.fulfillment, currentUser));
@@ -208,8 +217,11 @@ const WonAuctionCard = ({ auction, currentUser }) => {
                 </a>
               )}
               <p className="text-sm text-slate-600">
-                Rating {seller.ratingAverage || 0}/5 from{" "}
-                {seller.ratingCount || 0} reviews
+                {sellerRating === "No rating yet"
+                  ? "No seller reviews yet"
+                  : `Rating ${sellerRating} from ${formatReviewCount(
+                      seller.ratingCount
+                    )}`}
               </p>
             </div>
 

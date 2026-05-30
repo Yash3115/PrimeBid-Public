@@ -6,7 +6,12 @@ import {
   getFulfillmentTone,
   sellerShipmentStatusOptions,
 } from "@/lib/fulfillment";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import {
+  formatCurrency,
+  formatDateTime,
+  formatReviewCount,
+  formatSellerRating,
+} from "@/lib/format";
 import {
   getSellerDashboard,
   updateFulfillmentStatus,
@@ -136,12 +141,11 @@ const SellerDashboard = () => {
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
                   Reputation
                 </p>
-                <p className="mt-1 text-3xl font-bold text-slate-950">
-                  {stats?.reputation?.ratingAverage || 0}
-                  <span className="text-base font-semibold text-slate-500">
-                    {" "}
-                    / 5
-                  </span>
+                <p className="mt-1 text-2xl font-bold text-slate-950 sm:text-3xl">
+                  {formatSellerRating(stats?.reputation)}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {formatReviewCount(stats?.reputation?.ratingCount)}
                 </p>
               </div>
               <span className="flex h-11 w-11 items-center justify-center rounded-md bg-indigo-100 text-indigo-700">

@@ -17,6 +17,35 @@ export const formatDateTime = (date) => {
   }).format(parsedDate);
 };
 
+export const formatSellerRating = (reputationOrAverage, ratingCount) => {
+  const reputation =
+    reputationOrAverage && typeof reputationOrAverage === "object"
+      ? reputationOrAverage
+      : null;
+  const average = Number(reputation?.ratingAverage ?? reputationOrAverage);
+  const countValue = reputation?.ratingCount ?? ratingCount;
+  const hasCount = countValue !== undefined && countValue !== null;
+  const count = Number(countValue);
+
+  if (hasCount && (!Number.isFinite(count) || count <= 0)) {
+    return "No rating yet";
+  }
+
+  if (!Number.isFinite(average) || average <= 0) {
+    return "No rating yet";
+  }
+
+  return `${new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 1,
+  }).format(average)}/5`;
+};
+
+export const formatReviewCount = (countValue) => {
+  const count = Number(countValue || 0);
+  if (!Number.isFinite(count) || count <= 0) return "No reviews yet";
+  return `${count} ${count === 1 ? "review" : "reviews"}`;
+};
+
 export const normalizeAuctionStatus = (status) => {
   if (status === "Not started") return "Upcoming";
   if (["Upcoming", "Live", "Ended", "Invalid"].includes(status)) return status;
