@@ -26,7 +26,7 @@ const normalizeLocalApiBaseUrl = (baseUrl) => {
   return baseUrl;
 };
 
-const API_BASE_URL =
+export const API_BASE_URL =
   normalizeLocalApiBaseUrl(configuredApiBaseUrl) ||
   (import.meta.env.DEV
     ? normalizeLocalApiBaseUrl("http://localhost:8000/api/v1")

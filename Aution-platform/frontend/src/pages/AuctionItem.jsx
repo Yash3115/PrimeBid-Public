@@ -4,6 +4,7 @@ import {
   getBidderAuctionLock,
   getBidWalletRequirement,
 } from "@/lib/bidWallet";
+import { useAuctionLiveSync } from "@/hooks/useAuctionLiveSync";
 import {
   formatCurrency,
   formatDateTime,
@@ -19,6 +20,7 @@ import {
   normalizeTrustBadges,
 } from "@/lib/sellerQuality";
 import {
+  checkAuctionSync,
   getAuctionDetail,
   getBidAdvice,
   summarizeAuction,
@@ -167,7 +169,13 @@ const AuctionItem = () => {
       `Place a bid of ${formatCurrency(Number(amount || 0))}? Bids are binding while the auction is live.`
     );
     if (!confirmed) return;
-    const result = await dispatch(placeBid(id, { amount, maxAutoBid }));
+    const result = await dispatch(
+      placeBid(id, {
+        amount,
+        maxAutoBid,
+        expectedBidVersion: auctionDetail.bidVersion || 0,
+      })
+    );
     if (result?.success) {
       setAmount("");
       setMaxAutoBid("");
@@ -176,14 +184,24 @@ const AuctionItem = () => {
 
   const handleAutoBidUpdate = async (e) => {
     e?.preventDefault();
-    const result = await dispatch(manageAutoBid(id, { maxAutoBid: autoBidLimit }));
+    const result = await dispatch(
+      manageAutoBid(id, {
+        maxAutoBid: autoBidLimit,
+        expectedBidVersion: auctionDetail.bidVersion || 0,
+      })
+    );
     if (result?.autoBid?.active) {
       setAutoBidLimit(String(result.autoBid.maxAmount));
     }
   };
 
   const handleAutoBidCancel = async () => {
-    const result = await dispatch(manageAutoBid(id, { action: "cancel" }));
+    const result = await dispatch(
+      manageAutoBid(id, {
+        action: "cancel",
+        expectedBidVersion: auctionDetail.bidVersion || 0,
+      })
+    );
     if (result?.success) {
       setAutoBidLimit("");
     }
@@ -218,15 +236,35 @@ const AuctionItem = () => {
     dispatch(getBidAdvice(getAiAuctionPayload(), amount || nextBid));
   };
 
-  useEffect(() => {
-    if (id) {
-      dispatch(getAuctionDetail(id));
-      const interval = setInterval(() => {
-        dispatch(getAuctionDetail(id, { silent: true }));
-      }, 12000);
-      return () => clearInterval(interval);
+  const refreshLiveAuction = () => {
+    dispatch(getAuctionDetail(id, { silent: true }));
+    if (isAuthenticated && user?.role === "Bidder") {
+      dispatch(fetchWallet());
     }
+  };
+
+  const liveSyncConnected = useAuctionLiveSync({
+    auctionId: id,
+    bidVersion: auctionDetail.bidVersion,
+    enabled: Boolean(
+      id && auctionDetail._id && auctionDetail.status !== "Draft"
+    ),
+    onChange: refreshLiveAuction,
+  });
+
+  useEffect(() => {
+    if (!id) return undefined;
+    dispatch(getAuctionDetail(id));
+    return undefined;
   }, [dispatch, id]);
+
+  useEffect(() => {
+    if (!id) return undefined;
+    const interval = setInterval(() => {
+      dispatch(checkAuctionSync(id, auctionDetail.bidVersion || 0));
+    }, liveSyncConnected ? 15000 : isLive ? 5000 : 12000);
+    return () => clearInterval(interval);
+  }, [auctionDetail.bidVersion, dispatch, id, isLive, liveSyncConnected]);
 
   useEffect(() => {
     if (authChecked && isAuthenticated && user.role === "Bidder") {
@@ -355,9 +393,20 @@ const AuctionItem = () => {
             <div className="order-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
                 <h2 className="text-xl font-semibold text-slate-950">Bids</h2>
-                <span className="text-sm font-semibold text-slate-500">
-                  {bidders.length} total
-                </span>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <span
+                    className={`rounded-md px-2.5 py-1 text-xs font-bold ${
+                      liveSyncConnected
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {liveSyncConnected ? "Live sync" : "Auto refresh"}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-500">
+                    {bidders.length} total
+                  </span>
+                </div>
               </div>
 
               <div className="max-h-[520px] overflow-y-auto p-5">

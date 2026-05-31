@@ -25,6 +25,13 @@ import {
     buildMarketplaceQuery,
     getRuntimeStatusQuery,
 } from "../utils/auctionMarketplace.js";
+import {
+    buildAuctionSyncSnapshot,
+    bumpAuctionBidVersion,
+    hasAuctionChangedSince,
+    publishAuctionEvent,
+    subscribeAuctionEvents,
+} from "../utils/auctionRealtime.js";
 
 const allowedImageFormats = ["image/png", "image/jpeg", "image/webp"];
 
@@ -389,6 +396,85 @@ const getAuctionDetails = asyncErrorHandler(async(req,res,next)=>{
     })
 })
 
+const canViewDraftAuction = (auctionItem, user) => {
+    const requesterId = user?._id?.toString?.();
+    const ownerId = auctionItem.createdBy?._id?.toString?.() || auctionItem.createdBy?.toString?.();
+    return requesterId && (requesterId === ownerId || user?.role === "Super Admin");
+};
+
+const getAuctionSync = asyncErrorHandler(async(req,res,next)=>{
+    const now = new Date();
+    const {id} = req.params;
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        const err = new Error("Invalid ID Format");
+        err.statusCode = 400;
+        return next(err);
+    }
+    const auctionItem = await Auction.findById(id).select(
+        "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt"
+    );
+    if(!auctionItem){
+        const err = new Error("Auction not found");
+        err.statusCode = 404;
+        return next(err);
+    }
+    if(auctionItem.status === "Draft" && !canViewDraftAuction(auctionItem, req.user)){
+        const err = new Error("Auction not found");
+        err.statusCode = 404;
+        return next(err);
+    }
+    return res.status(200).json({
+        success: true,
+        changed: hasAuctionChangedSince(auctionItem, req.query.knownBidVersion),
+        snapshot: buildAuctionSyncSnapshot(auctionItem, now),
+    });
+});
+
+const streamAuctionEvents = asyncErrorHandler(async(req,res,next)=>{
+    const now = new Date();
+    const {id} = req.params;
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        const err = new Error("Invalid ID Format");
+        err.statusCode = 400;
+        return next(err);
+    }
+    const auctionItem = await Auction.findById(id).select(
+        "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt"
+    );
+    if(!auctionItem || (auctionItem.status === "Draft" && !canViewDraftAuction(auctionItem, req.user))){
+        const err = new Error("Auction not found");
+        err.statusCode = 404;
+        return next(err);
+    }
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const sendEvent = (event) => {
+        res.write(`event: ${event.type || "auction_sync"}\n`);
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    sendEvent({
+        type: "auction_sync",
+        snapshot: buildAuctionSyncSnapshot(auctionItem, now),
+        emittedAt: now.toISOString(),
+    });
+
+    const unsubscribe = subscribeAuctionEvents(id, sendEvent);
+    const heartbeat = setInterval(() => {
+        res.write(`event: heartbeat\n`);
+        res.write(`data: ${JSON.stringify({ emittedAt: new Date().toISOString() })}\n\n`);
+    }, 25000);
+
+    req.on("close", () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+        res.end();
+    });
+});
+
 const updateAuctionItem = asyncErrorHandler(async(req,res,next)=>{
     const {id} = req.params;
     if(!mongoose.Types.ObjectId.isValid(id)){
@@ -520,8 +606,14 @@ const updateAuctionItem = asyncErrorHandler(async(req,res,next)=>{
         })
     );
 
-    auctionItem = await Auction.findByIdAndUpdate(id, updateData, { new: true });
     const now = new Date();
+    auctionItem = await Auction.findByIdAndUpdate(id, updateData, { new: true });
+    bumpAuctionBidVersion(auctionItem, now);
+    await auctionItem.save();
+    publishAuctionEvent(auctionItem._id, {
+        type: "auction_updated",
+        snapshot: buildAuctionSyncSnapshot(auctionItem, now),
+    });
     return res.status(200).json({
         success: true,
         message: "Auction updated successfully",
@@ -608,8 +700,14 @@ const publishAuctionDraft = asyncErrorHandler(async(req,res,next)=>{
         };
     }
 
-    auctionItem = await Auction.findByIdAndUpdate(id, updateData, { new: true });
     const now = new Date();
+    auctionItem = await Auction.findByIdAndUpdate(id, updateData, { new: true });
+    bumpAuctionBidVersion(auctionItem, now);
+    await auctionItem.save();
+    publishAuctionEvent(auctionItem._id, {
+        type: "auction_published",
+        snapshot: buildAuctionSyncSnapshot(auctionItem, now),
+    });
     return res.status(200).json({
         success: true,
         message: "Auction draft published",
@@ -880,8 +978,14 @@ const republishItem = asyncErrorHandler(async(req,res,next)=>{
         { $set: data, $unset: { highestBidder: "" } },
         {new: true}
     );
-    const user = await User.findById(req.user._id);
     const now = new Date();
+    bumpAuctionBidVersion(auctionItem, now);
+    await auctionItem.save();
+    publishAuctionEvent(auctionItem._id, {
+        type: "auction_republished",
+        snapshot: buildAuctionSyncSnapshot(auctionItem, now),
+    });
+    const user = await User.findById(req.user._id);
     return res.status(200).json({
         success: true,
         message: `Auction item republished and will be active from ${data.startTime}`,
@@ -897,6 +1001,8 @@ export {
     getAllItem,
     getMyAuctionItems,
     getAuctionDetails,
+    getAuctionSync,
+    streamAuctionEvents,
     updateAuctionItem,
     publishAuctionDraft,
     removefromAuction,

@@ -7,6 +7,12 @@ import { createNotification } from "../utils/notifications.js";
 import { applyAutoBidLimit, resolveAutoBidChallenge } from "../utils/autoBid.js";
 import { AUCTION_RUNTIME_STATUS, getAuctionTiming } from "../utils/auctionStatus.js";
 import {
+    buildAuctionSyncSnapshot,
+    bumpAuctionBidVersion,
+    getAuctionBidVersion,
+    publishAuctionEvent,
+} from "../utils/auctionRealtime.js";
+import {
     getWalletSnapshot,
     lockBidFunds,
     releaseAuctionBidLocks,
@@ -48,6 +54,22 @@ const placebid = asyncErrorHandler( async(req,res,next)=>{
         const err = new Error("This auction is still a draft");
         err.statusCode = 400;
         return next(err);
+    }
+    const expectedBidVersion =
+        req.body.expectedBidVersion === undefined || req.body.expectedBidVersion === ""
+            ? null
+            : Number(req.body.expectedBidVersion);
+    if(expectedBidVersion !== null && !Number.isFinite(expectedBidVersion)){
+        const err = new Error("Invalid auction revision. Please refresh and try again.");
+        err.statusCode = 400;
+        return next(err);
+    }
+    if(expectedBidVersion !== null && expectedBidVersion !== getAuctionBidVersion(auctionItem)){
+        return res.status(409).json({
+            success: false,
+            message: "Auction changed while you were bidding. Review the latest bid and try again.",
+            auctionSync: buildAuctionSyncSnapshot(auctionItem, new Date()),
+        });
     }
     const now = new Date();
     const timing = getAuctionTiming(auctionItem, now);
@@ -312,6 +334,7 @@ const placebid = asyncErrorHandler( async(req,res,next)=>{
                 message: `${auctionItem.title} was extended after a last-minute bid.`,
             });
         }
+        bumpAuctionBidVersion(auctionItem, new Date());
         await auctionItem.save();
         shouldCompensateLocks = false;
 
@@ -348,14 +371,20 @@ const placebid = asyncErrorHandler( async(req,res,next)=>{
             });
         }
 
+        const auctionSync = buildAuctionSyncSnapshot(auctionItem, new Date());
+        publishAuctionEvent(auctionItem._id, {
+            type: "bid",
+            snapshot: auctionSync,
+        });
         const refreshedBidder = await User.findById(req.user._id);
         return res.status(201).json({
             success: true,
             message: "Bid Placed",
             currentBid: auctionItem.currentBid,
             endTime: auctionItem.endTime,
-            runtimeStatus: getAuctionTiming(auctionItem).runtimeStatus,
-            serverTime: new Date().toISOString(),
+            runtimeStatus: auctionSync.runtimeStatus,
+            serverTime: auctionSync.serverTime,
+            auctionSync,
             wallet: getWalletSnapshot(refreshedBidder),
         });
     } catch (error) {
@@ -397,6 +426,22 @@ export const manageAutoBid = asyncErrorHandler(async(req,res,next)=>{
         const err = new Error("This auction is still a draft");
         err.statusCode = 400;
         return next(err);
+    }
+    const expectedBidVersion =
+        req.body.expectedBidVersion === undefined || req.body.expectedBidVersion === ""
+            ? null
+            : Number(req.body.expectedBidVersion);
+    if(expectedBidVersion !== null && !Number.isFinite(expectedBidVersion)){
+        const err = new Error("Invalid auction revision. Please refresh and try again.");
+        err.statusCode = 400;
+        return next(err);
+    }
+    if(expectedBidVersion !== null && expectedBidVersion !== getAuctionBidVersion(auctionItem)){
+        return res.status(409).json({
+            success: false,
+            message: "Auction changed while you were updating auto-bid. Review the latest state and try again.",
+            auctionSync: buildAuctionSyncSnapshot(auctionItem, new Date()),
+        });
     }
 
     const timing = getAuctionTiming(auctionItem);
@@ -451,7 +496,14 @@ export const manageAutoBid = asyncErrorHandler(async(req,res,next)=>{
         }
         await bidDoc.save();
     }
+    const now = new Date();
+    bumpAuctionBidVersion(auctionItem, now);
     await auctionItem.save();
+    const auctionSync = buildAuctionSyncSnapshot(auctionItem, now);
+    publishAuctionEvent(auctionItem._id, {
+        type: "auction_updated",
+        snapshot: auctionSync,
+    });
 
     return res.status(200).json({
         success: true,
@@ -463,8 +515,9 @@ export const manageAutoBid = asyncErrorHandler(async(req,res,next)=>{
             maxAmount: result.maxAmount,
         },
         currentBid: auctionItem.currentBid,
-        runtimeStatus: getAuctionTiming(auctionItem).runtimeStatus,
-        serverTime: new Date().toISOString(),
+        runtimeStatus: auctionSync.runtimeStatus,
+        serverTime: auctionSync.serverTime,
+        auctionSync,
     });
 });
 

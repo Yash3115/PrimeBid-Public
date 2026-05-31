@@ -45,6 +45,9 @@ export const placeBid = (id, data) => async (dispatch) => {
   } catch (error) {
     dispatch(bidSlice.actions.bidFailed());
     toastApiError(error);
+    if (error?.response?.status === 409) {
+      dispatch(getAuctionDetail(id, { silent: true }));
+    }
     return { success: false };
   }
 };
@@ -62,6 +65,9 @@ export const manageAutoBid = (id, data) => async (dispatch) => {
   } catch (error) {
     dispatch(bidSlice.actions.autoBidFailed());
     toastApiError(error);
+    if (error?.response?.status === 409) {
+      dispatch(getAuctionDetail(id, { silent: true }));
+    }
     return { success: false };
   }
 };

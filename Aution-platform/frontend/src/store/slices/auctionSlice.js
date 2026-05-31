@@ -133,6 +133,25 @@ const auctionSlice = createSlice({
       state.serverTime = action.payload.serverTime;
       state.serverTimeReceivedAt = action.payload.receivedAt;
     },
+    auctionSyncSuccess(state, action) {
+      const snapshot = action.payload.snapshot;
+      state.serverTime = snapshot?.serverTime || action.payload.serverTime;
+      state.serverTimeReceivedAt = action.payload.receivedAt;
+      if (
+        snapshot &&
+        state.auctionDetail?._id?.toString?.() === snapshot.auctionId?.toString?.()
+      ) {
+        state.auctionDetail = {
+          ...state.auctionDetail,
+          currentBid: snapshot.currentBid,
+          endTime: snapshot.endTime || state.auctionDetail.endTime,
+          bidVersion: snapshot.bidVersion,
+          lastBidAt: snapshot.lastBidAt,
+          runtimeStatus: snapshot.runtimeStatus,
+          isBiddable: snapshot.isBiddable,
+        };
+      }
+    },
     smartRecommendationsSuccess(state, action) {
       state.smartRecommendations = action.payload.items;
       state.serverTime = action.payload.serverTime;
@@ -290,6 +309,32 @@ export const createAuction = (data) => async (dispatch) => {
     dispatch(auctionSlice.actions.resetSlice());
   }
 };
+
+export const checkAuctionSync =
+  (id, knownBidVersion = null) =>
+  async (dispatch) => {
+    try {
+      const response = await api.get(`/auctionitem/auction/${id}/sync`, {
+        params:
+          knownBidVersion === null || knownBidVersion === undefined
+            ? {}
+            : { knownBidVersion },
+      });
+      dispatch(
+        auctionSlice.actions.auctionSyncSuccess({
+          ...response.data,
+          receivedAt: Date.now(),
+        })
+      );
+      if (response.data.changed) {
+        dispatch(getAuctionDetail(id, { silent: true }));
+      }
+      return response.data;
+    } catch (error) {
+      console.error(getErrorMessage(error));
+      return { success: false };
+    }
+  };
 
 export const republishAuction = (id, data) => async (dispatch) => {
   dispatch(auctionSlice.actions.republishItemRequest());

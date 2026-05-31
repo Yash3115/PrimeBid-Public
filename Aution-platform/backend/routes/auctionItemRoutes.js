@@ -11,6 +11,8 @@ import {
     getSellerDashboard,
     getSmartRecommendations,
     reviewSeller,
+    getAuctionSync,
+    streamAuctionEvents,
 } from "../controllers/auctioncontroller.js";
 import {
     respondToFulfillmentIssue,
@@ -25,6 +27,8 @@ router.post("/create", isAuth,isAuthorised("Auctioneer"),requireAuctioneerKyc,ad
 router.post("/draft", isAuth,isAuthorised("Auctioneer"),requireAuctioneerKyc,saveAuctionDraft);
 router.get("/allitems",getAllItem);
 router.get("/smart-recommendations",isAuth,getSmartRecommendations);
+router.get("/auction/:id/sync",optionalAuth,getAuctionSync);
+router.get("/auction/:id/stream",optionalAuth,streamAuctionEvents);
 router.get("/auction/:id",optionalAuth,getAuctionDetails);
 router.get("/seller-dashboard",isAuth,isAuthorised("Auctioneer"), getSellerDashboard);
 router.get("/myitems",isAuth,isAuthorised("Auctioneer"), getMyAuctionItems);

@@ -19,6 +19,11 @@ import {
   releaseAuctionBidLocks,
 } from "../utils/wallet.js";
 import { runWithOptionalTransaction } from "../utils/mongoTransaction.js";
+import {
+  buildAuctionSyncSnapshot,
+  bumpAuctionBidVersion,
+  publishAuctionEvent,
+} from "../utils/auctionRealtime.js";
 
 export const runEndedAuctionTasks = async () => {
   const now = new Date();
@@ -67,13 +72,19 @@ export const runEndedAuctionTasks = async () => {
     try {
       const commissionAmount = await calculateCommission(auction._id);
       auction.commissionCalculated = true;
+      auction.closedAt = now;
       const highestBidder = await Bid.findOne({
         auctionItem: auction._id,
         amount: Number(auction.currentBid),
       }).sort({ amount: -1 });
       const auctioneer = await User.findById(auction.createdBy);
       if (!auctioneer) {
+        bumpAuctionBidVersion(auction, now);
         await auction.save();
+        publishAuctionEvent(auction._id, {
+          type: "auction_closed",
+          snapshot: buildAuctionSyncSnapshot(auction, new Date()),
+        });
         continue;
       }
       if (highestBidder) {
@@ -105,6 +116,7 @@ export const runEndedAuctionTasks = async () => {
           if (winningBidEntry && settlement.settled) {
             winningBidEntry.lockedAmount = 0;
           }
+          bumpAuctionBidVersion(auction, now);
           await auction.save({ session });
 
           const fulfillmentResult = await ensureFulfillmentForAuction({
@@ -210,8 +222,13 @@ export const runEndedAuctionTasks = async () => {
           auction,
           note: "Bid lock released because auction closed without a winner",
         });
+        bumpAuctionBidVersion(auction, now);
         await auction.save();
       }
+      publishAuctionEvent(auction._id, {
+        type: "auction_closed",
+        snapshot: buildAuctionSyncSnapshot(auction, new Date()),
+      });
     } catch (error) {
       console.error(error || "Some error in ended auction cron");
     }
