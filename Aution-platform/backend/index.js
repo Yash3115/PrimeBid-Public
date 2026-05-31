@@ -16,6 +16,7 @@ import walletRoutes from "./routes/walletRoutes.js";
 import { endedAuctionCron } from "./automation/endedAuctionCron.js";
 import { requireTrustedOrigin, securityHeaders } from "./middlewares/security.js";
 import { isAllowedOrigin } from "./utils/origin.js";
+import { buildDemoMarketplaceResponse } from "./utils/demoMarketplace.js";
 
 dotenv.config();
 const app=express();
@@ -79,6 +80,19 @@ const requireDatabaseConnection = async (req, res, next) => {
         next(err);
     }
 };
+
+const allowDemoMarketplaceFallback =
+    process.env.NODE_ENV !== "production" &&
+    process.env.DISABLE_DEMO_MARKETPLACE_FALLBACK !== "true";
+
+app.get("/api/v1/auctionitem/allitems", (req, res, next) => {
+    const database = getConnectionStatus();
+    if (database.connected || !allowDemoMarketplaceFallback) {
+        return next();
+    }
+
+    return res.status(200).json(buildDemoMarketplaceResponse());
+});
 
 app.use("/api/v1/user", requireDatabaseConnection, userroute)
 app.use("/api/v1/auctionitem", requireDatabaseConnection, auctionItemRoute)
