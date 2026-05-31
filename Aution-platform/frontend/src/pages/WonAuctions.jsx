@@ -1,4 +1,6 @@
+import AuctionImage from "@/custom-components/AuctionImage";
 import Spinner from "@/custom-components/Spinner";
+import { getWinnerNextAction } from "@/lib/actionInsights";
 import {
   canConfirmDelivery,
   canEditDeliveryAddress,
@@ -134,6 +136,7 @@ const WonAuctionCard = ({ auction, currentUser }) => {
     seller.ratingAverage,
     seller.ratingCount
   );
+  const nextAction = getWinnerNextAction(auction);
   const canReviewSeller =
     fulfillment?.settlementStatus === SETTLEMENT_STATUS.RELEASED_TO_SELLER;
 
@@ -184,14 +187,29 @@ const WonAuctionCard = ({ auction, currentUser }) => {
   return (
     <div
       id={`won-auction-${auction._id}`}
-      className="scroll-mt-24 grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[160px_1fr]"
+      className="scroll-mt-24 grid gap-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[260px_minmax(0,1fr)]"
     >
-      <img
-        src={auction.image?.url || "/imageHolder.jpg"}
-        alt={auction.title}
-        className="h-40 w-full rounded-md object-cover md:h-full"
-      />
-      <div className="grid gap-4">
+      <div className="grid h-fit gap-3">
+        <AuctionImage
+          image={auction.image}
+          alt={auction.title}
+          aspect="4/3"
+          fit="contain"
+          priority
+        />
+        <div className="rounded-md border border-indigo-100 bg-indigo-50 p-3">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-indigo-700">
+            Next action
+          </p>
+          <p className="mt-1 font-semibold text-indigo-950">
+            {nextAction.label}
+          </p>
+          <p className="mt-1 text-sm leading-6 text-indigo-900">
+            {nextAction.detail}
+          </p>
+        </div>
+      </div>
+      <div className="grid min-w-0 gap-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Link

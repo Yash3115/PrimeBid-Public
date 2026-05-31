@@ -1,9 +1,11 @@
-import Spinner from "@/custom-components/Spinner";
 import ActionCenter from "@/custom-components/ActionCenter";
+import AuctionImage from "@/custom-components/AuctionImage";
+import Spinner from "@/custom-components/Spinner";
 import {
   buildBidderNextActions,
   getWinnerNextAction,
 } from "@/lib/actionInsights";
+import { filterActionableBidLocks } from "@/lib/dashboardUi";
 import { formatCurrency, formatDateTime, getAuctionStatus } from "@/lib/format";
 import { getAllAuctionItems, getSmartRecommendations } from "@/store/slices/auctionSlice";
 import { fetchWatchlist, fetchWonAuctions } from "@/store/slices/userSlice";
@@ -64,7 +66,8 @@ const BidderDashboard = () => {
   const dashboardLoading = !authChecked || walletLoading || auctionLoading;
   const availableBalance = Number(wallet.availableBalance || 0);
   const lockedBalance = Number(wallet.lockedBalance || 0);
-  const bidLocks = lockBreakdown?.bidLocks || [];
+  const rawBidLocks = lockBreakdown?.bidLocks;
+  const bidLocks = useMemo(() => rawBidLocks || [], [rawBidLocks]);
   const withdrawalLocks = lockBreakdown?.withdrawalLocks || [];
   const pendingWithdrawals = withdrawals.filter(
     (withdrawal) => withdrawal.status === "Pending"
@@ -115,20 +118,24 @@ const BidderDashboard = () => {
     [serverTime, serverTimeReceivedAt, watchlist]
   );
 
-  const leadingLocks = bidLocks.slice(0, 4);
+  const activeBidLocks = useMemo(
+    () => filterActionableBidLocks(bidLocks),
+    [bidLocks]
+  );
+  const leadingLocks = activeBidLocks.slice(0, 4);
   const recommendations = smartRecommendations.slice(0, 4);
   const nextActions = buildBidderNextActions({
     availableBalance,
-    bidLocks,
+    bidLocks: activeBidLocks,
     outbidAuctions,
     pendingWithdrawals,
     wonAuctions,
   });
   const actionItems = [
     {
-      label: "Leading bids",
+      label: "Active holds",
       value: leadingLocks.length,
-      detail: "Money currently locked for auction leads",
+      detail: "Live bids currently locking wallet funds",
       icon: Gavel,
     },
     {
@@ -139,8 +146,8 @@ const BidderDashboard = () => {
     },
     {
       label: "Watchlist",
-      value: watchlist.length,
-      detail: "Saved auctions to monitor",
+      value: watchlistEndingSoon.length,
+      detail: "Saved live or upcoming auctions",
       icon: Heart,
     },
     {
@@ -154,17 +161,17 @@ const BidderDashboard = () => {
   return (
     <section className="app-page">
       <div className="app-container grid gap-6">
-        <div className="grid gap-5 rounded-lg border border-indigo-100 bg-white p-5 shadow-sm md:p-6 xl:grid-cols-[1fr_420px] xl:items-center">
+        <div className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-center">
           <div>
             <p className="app-kicker">
-              Bidder Command Center
+              Bidder Workspace
             </p>
-            <h1 className="mt-2 text-4xl font-bold text-slate-950 md:text-5xl">
-              Welcome back, {user.userName || "bidder"}
+            <h1 className="mt-2 text-3xl font-bold text-slate-950 md:text-4xl">
+              Actionable bids and won-auction handoffs
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-              Track bid holds, spot auctions that need action, and keep wallet
-              money ready before the next bidding window closes.
+              See live holds, auctions that need a response, saved auctions
+              that are still relevant, and post-win delivery tasks.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
@@ -240,7 +247,7 @@ const BidderDashboard = () => {
 
             <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
               <Panel
-                title="Bids You Are Leading"
+                title="Active Bid Holds"
                 action={{ label: "Wallet", to: "/wallet" }}
               >
                 {leadingLocks.length > 0 ? (
@@ -260,8 +267,8 @@ const BidderDashboard = () => {
                   </div>
                 ) : (
                   <EmptyState
-                    title="No active leading bids"
-                    text="Place a bid on a live auction and the wallet hold will appear here."
+                    title="No live bid holds"
+                    text="Ended bid history stays in wallet transactions and notifications so this dashboard stays focused."
                     action={{ label: "Find Live Auctions", to: "/auctions" }}
                   />
                 )}
@@ -336,10 +343,13 @@ const BidderDashboard = () => {
                 )}
               </Panel>
 
-              <Panel title="Recent Wins">
+              <Panel
+                title="Won Auction Handoffs"
+                action={{ label: "All Wins", to: "/won-auctions" }}
+              >
                 {wonAuctions.length > 0 ? (
                   <div className="grid gap-3">
-                    {wonAuctions.slice(0, 3).map((auction) => (
+                    {wonAuctions.slice(0, 4).map((auction) => (
                       <AuctionRow
                         key={auction._id}
                         image={auction.image?.url}
@@ -455,10 +465,12 @@ const AuctionRow = ({
       to={to}
       className="grid gap-3 rounded-md border border-slate-200 p-3 transition hover:border-indigo-200 hover:bg-indigo-50/40 sm:grid-cols-[64px_1fr_auto] sm:items-center"
     >
-      <img
-        src={image || "/imageHolder.jpg"}
+      <AuctionImage
+        src={image}
         alt={title}
-        className="h-16 w-16 rounded-md object-cover"
+        aspect="square"
+        fit="contain"
+        className="h-16 w-16 p-1"
       />
       <div className="min-w-0">
         <p className="truncate font-semibold text-slate-950">{title}</p>

@@ -1,6 +1,9 @@
-import Spinner from "@/custom-components/Spinner";
 import ActionCenter from "@/custom-components/ActionCenter";
+import AuctionImage from "@/custom-components/AuctionImage";
+import { AuctionHealthBadge } from "@/custom-components/AuctionHealth";
+import Spinner from "@/custom-components/Spinner";
 import { buildSellerNextActions } from "@/lib/actionInsights";
+import { sortSellerFulfillmentQueue } from "@/lib/dashboardUi";
 import {
   FULFILLMENT_STATUS,
   getDisputeLabel,
@@ -33,8 +36,8 @@ import {
 } from "@/store/slices/auctionSlice";
 import { fetchWallet } from "@/store/slices/walletSlice";
 import {
-  AlertTriangle,
   ArrowUpFromLine,
+  AlertTriangle,
   Clock3,
   Eye,
   FileText,
@@ -47,7 +50,7 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -77,15 +80,25 @@ const SellerDashboard = () => {
   const endingSoon = sellerDashboard?.endingSoon || [];
   const noBidAuctions = sellerDashboard?.noBidAuctions || [];
   const recentAuctions = sellerDashboard?.recentAuctions || [];
-  const fulfillmentQueue = sellerDashboard?.fulfillmentQueue || [];
   const healthQueue = sellerDashboard?.healthQueue || [];
+  const rawFulfillmentQueue = sellerDashboard?.fulfillmentQueue;
+  const fulfillmentQueue = useMemo(
+    () => rawFulfillmentQueue || [],
+    [rawFulfillmentQueue]
+  );
+  const orderedFulfillmentQueue = useMemo(
+    () => sortSellerFulfillmentQueue(fulfillmentQueue),
+    [fulfillmentQueue]
+  );
+  const healthAlerts = healthQueue.length;
   const nextActions = buildSellerNextActions({
     availableBalance,
-    fulfillmentQueue,
+    fulfillmentQueue: orderedFulfillmentQueue,
     healthQueue,
     noBidAuctions,
     sellerQuality,
   });
+  const atRiskCount = Number(stats?.health?.["At Risk"] || 0);
   const readyToShipCount = Number(stats?.fulfillment?.ReadyToShip || 0);
   const awaitingAddressCount = Number(stats?.fulfillment?.AwaitingAddress || 0);
   const cards = [
@@ -120,6 +133,14 @@ const SellerDashboard = () => {
       icon: Wallet,
     },
     {
+      label: "Health Alerts",
+      value: healthAlerts,
+      detail: atRiskCount
+        ? `${atRiskCount} auction${atRiskCount === 1 ? "" : "s"} at risk`
+        : "Listings needing seller attention",
+      icon: AlertTriangle,
+    },
+    {
       label: "Risk Level",
       value: sellerQuality?.riskLevel || "Low",
       detail: sellerQuality
@@ -132,17 +153,17 @@ const SellerDashboard = () => {
   return (
     <section className="app-page">
       <div className="app-container grid gap-6">
-        <div className="grid gap-5 rounded-lg border border-indigo-100 bg-white p-5 shadow-sm md:p-6 xl:grid-cols-[1fr_420px] xl:items-center">
+        <div className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-center">
           <div>
             <p className="app-kicker">
-              Seller Command Center
+              Auctioneer Operations
             </p>
-            <h1 className="mt-2 text-4xl font-bold text-slate-950 md:text-5xl">
-              Manage Listings, Bids, and Payouts
+            <h1 className="mt-2 text-3xl font-bold text-slate-950 md:text-4xl">
+              Seller operations console
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-              Keep auctions moving, spot listings that need attention, and
-              withdraw proceeds directly from your wallet.
+              Ship won auctions, keep listings healthy, and manage proceeds
+              without digging through marketplace screens.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
@@ -211,6 +232,27 @@ const SellerDashboard = () => {
           <Spinner />
         ) : (
           <>
+            <Panel id="fulfillment" title="Fulfillment Command Queue">
+              <FulfillmentSummaryGrid stats={stats?.fulfillment || {}} />
+              {orderedFulfillmentQueue.length > 0 ? (
+                <div className="mt-4 grid gap-4">
+                  {orderedFulfillmentQueue.map((fulfillment) => (
+                    <SellerFulfillmentCard
+                      key={fulfillment._id}
+                      fulfillment={fulfillment}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <EmptyState
+                    title="No shipments pending"
+                    text="Won auctions will appear here when there is a buyer handoff, address, shipment, dispute, or escrow release to manage."
+                  />
+                </div>
+              )}
+            </Panel>
+
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {cards.map(({ icon: Icon, label, value, detail }) => (
                 <MetricCard
@@ -234,20 +276,18 @@ const SellerDashboard = () => {
             <Panel id="account-health" title="Account Quality">
               <SellerQualityPanel quality={sellerQuality} />
             </Panel>
-            <Panel id="fulfillment" title="Fulfillment Queue">
-              {fulfillmentQueue.length > 0 ? (
-                <div className="grid gap-4">
-                  {fulfillmentQueue.map((fulfillment) => (
-                    <SellerFulfillmentCard
-                      key={fulfillment._id}
-                      fulfillment={fulfillment}
-                    />
+
+            <Panel id="health" title="Auction Health Monitor">
+              {healthQueue.length > 0 ? (
+                <div className="grid gap-3">
+                  {healthQueue.map((auction) => (
+                    <HealthAuctionRow key={auction._id} auction={auction} />
                   ))}
                 </div>
               ) : (
                 <EmptyState
-                  title="No shipments pending"
-                  text="Won auctions will appear here after buyers add delivery details."
+                  title="All active listings look healthy"
+                  text="Auctions with no bids, weak quality, or closing risk will appear here."
                 />
               )}
             </Panel>
@@ -256,13 +296,11 @@ const SellerDashboard = () => {
               <Panel title="Top Auction">
                 {sellerDashboard.topAuction ? (
                   <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-                    <img
-                      src={
-                        sellerDashboard.topAuction.image?.url ||
-                        "/imageHolder.jpg"
-                      }
+                    <AuctionImage
+                      image={sellerDashboard.topAuction.image}
                       alt={sellerDashboard.topAuction.title}
-                      className="h-40 w-full rounded-md object-cover"
+                      aspect="4/3"
+                      fit="contain"
                     />
                     <div>
                       <Link
@@ -289,7 +327,7 @@ const SellerDashboard = () => {
                 )}
               </Panel>
 
-              <Panel id="seller-attention" title="Seller Attention Queue">
+              <Panel title="Seller Attention Queue">
                 <div className="grid gap-3">
                   {noBidAuctions.map((auction) => (
                     <AuctionRow
@@ -393,6 +431,28 @@ const MiniMetric = ({ label, value }) => (
   </div>
 );
 
+const FulfillmentSummaryGrid = ({ stats = {} }) => {
+  const shippedCount = Number(stats[FULFILLMENT_STATUS.SHIPPED] || 0);
+  const outForDeliveryCount = Number(
+    stats[FULFILLMENT_STATUS.OUT_FOR_DELIVERY] || 0
+  );
+  const items = [
+    ["Waiting for address", stats[FULFILLMENT_STATUS.AWAITING_ADDRESS] || 0],
+    ["Ready to ship", stats[FULFILLMENT_STATUS.READY_TO_SHIP] || 0],
+    ["In transit", shippedCount + outForDeliveryCount],
+    ["Delivered", stats[FULFILLMENT_STATUS.DELIVERED] || 0],
+    ["Issues", stats[FULFILLMENT_STATUS.ISSUE_REPORTED] || 0],
+  ];
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {items.map(([label, value]) => (
+        <MiniMetric key={label} label={label} value={value} />
+      ))}
+    </div>
+  );
+};
+
 const Panel = ({ title, children, id }) => (
   <section
     id={id}
@@ -415,10 +475,12 @@ const AuctionRow = ({ auction, label, tone = "slate" }) => {
       to={`/auction/details/${auction._id}`}
       className="grid gap-3 rounded-md border border-slate-200 p-3 transition hover:border-indigo-200 hover:bg-indigo-50/40 sm:grid-cols-[64px_1fr_auto] sm:items-center"
     >
-      <img
-        src={auction.image?.url || "/imageHolder.jpg"}
+      <AuctionImage
+        image={auction.image}
         alt={auction.title}
-        className="h-16 w-16 rounded-md object-cover"
+        aspect="square"
+        fit="contain"
+        className="h-16 w-16 p-1"
       />
       <div className="min-w-0">
         <p className="truncate font-semibold text-slate-950">{auction.title}</p>
@@ -432,9 +494,41 @@ const AuctionRow = ({ auction, label, tone = "slate" }) => {
       >
         {label}
       </span>
+      {auction.auctionHealth && (
+        <span className="sm:col-start-2 sm:col-end-4">
+          <AuctionHealthBadge health={auction.auctionHealth} />
+        </span>
+      )}
     </Link>
   );
 };
+
+const HealthAuctionRow = ({ auction }) => (
+  <Link
+    to={`/auction/details/${auction._id}`}
+    className="grid gap-3 rounded-md border border-slate-200 p-3 transition hover:border-indigo-200 hover:bg-indigo-50/40 md:grid-cols-[72px_1fr_auto] md:items-center"
+  >
+    <AuctionImage
+      image={auction.image}
+      alt={auction.title}
+      aspect="square"
+      fit="contain"
+      className="h-[72px] w-[72px] p-1"
+    />
+    <div className="min-w-0">
+      <p className="truncate font-semibold text-slate-950">{auction.title}</p>
+      <p className="mt-1 text-sm leading-6 text-slate-500">
+        {auction.auctionHealth?.summary}
+      </p>
+      {auction.auctionHealth?.recommendations?.[0] && (
+        <p className="mt-1 text-sm font-medium text-amber-700">
+          {auction.auctionHealth.recommendations[0]}
+        </p>
+      )}
+    </div>
+    <AuctionHealthBadge health={auction.auctionHealth} />
+  </Link>
+);
 
 const EmptyState = ({ title, text, action }) => (
   <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
@@ -586,11 +680,13 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
   };
 
   return (
-    <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[92px_1fr]">
-      <img
-        src={auction.image?.url || "/imageHolder.jpg"}
+    <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[112px_minmax(0,1fr)]">
+      <AuctionImage
+        image={auction.image}
         alt={auction.title || "Auction item"}
-        className="h-24 w-24 rounded-md object-cover"
+        aspect="square"
+        fit="contain"
+        className="h-28 w-28 p-2"
       />
       <div className="grid gap-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
