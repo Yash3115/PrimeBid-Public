@@ -37,7 +37,7 @@ const demoUsers = [
     {
         userName: "PrimeBid Admin",
         email: "admin@primebid.local",
-        password: "Admin@123",
+        password: "PrimeBid@123",
         phone: "9000000001",
         address: "PrimeBid admin workspace",
         role: "Super Admin",
