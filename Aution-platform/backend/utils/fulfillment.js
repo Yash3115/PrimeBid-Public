@@ -16,6 +16,30 @@ export const sellerManagedStatuses = [
   FULFILLMENT_STATUS.ISSUE_REPORTED,
 ];
 
+export const DISPUTE_STATUS = {
+  OPEN: "Open",
+  SELLER_RESPONDED: "SellerResponded",
+  NEEDS_MORE_INFO: "NeedsMoreInfo",
+  RESOLVED: "Resolved",
+  BUYER_FAVORED: "BuyerFavored",
+  SELLER_FAVORED: "SellerFavored",
+};
+
+export const DISPUTE_FINAL_STATUSES = [
+  DISPUTE_STATUS.RESOLVED,
+  DISPUTE_STATUS.BUYER_FAVORED,
+  DISPUTE_STATUS.SELLER_FAVORED,
+];
+
+export const DISPUTE_ISSUE_TYPES = [
+  "NotDelivered",
+  "DamagedItem",
+  "WrongItem",
+  "TrackingProblem",
+  "SellerUnresponsive",
+  "Other",
+];
+
 const cleanString = (value, max = 160) =>
   String(value || "")
     .trim()
@@ -65,6 +89,61 @@ export const normalizeDeliveryAddress = (input = {}) => {
   }
 
   return address;
+};
+
+export const normalizeDisputeReport = (input = {}) => {
+  const issueType = cleanString(input.issueType, 60);
+  const description = cleanString(input.description, 1000);
+
+  if (!DISPUTE_ISSUE_TYPES.includes(issueType)) {
+    const err = new Error("Please choose a valid issue type");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (description.length < 10) {
+    const err = new Error("Please describe the delivery issue in at least 10 characters");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return {
+    issueType,
+    description,
+  };
+};
+
+export const normalizeDisputeResponse = (input = {}) => {
+  const sellerResponse = cleanString(input.sellerResponse, 1000);
+  if (sellerResponse.length < 10) {
+    const err = new Error("Seller response must be at least 10 characters");
+    err.statusCode = 400;
+    throw err;
+  }
+  return { sellerResponse };
+};
+
+export const normalizeAdminDisputeReview = (input = {}) => {
+  const status = cleanString(input.status, 60);
+  const adminResolution = cleanString(input.adminResolution, 1000);
+
+  if (!Object.values(DISPUTE_STATUS).includes(status)) {
+    const err = new Error("Please choose a valid dispute review status");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (DISPUTE_FINAL_STATUSES.includes(status) && adminResolution.length < 10) {
+    const err = new Error("Final dispute decisions require a resolution note");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return {
+    status,
+    adminResolution,
+    isFinal: DISPUTE_FINAL_STATUSES.includes(status),
+  };
 };
 
 export const getFulfillmentProgress = (status) => {

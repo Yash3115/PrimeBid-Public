@@ -1,8 +1,13 @@
 import Spinner from "@/custom-components/Spinner";
 import {
   canEditDeliveryAddress,
+  disputeIssueTypeOptions,
+  getDisputeLabel,
+  getDisputeTone,
   getFulfillmentLabel,
   getFulfillmentTone,
+  getIssueTypeLabel,
+  hasOpenDispute,
 } from "@/lib/fulfillment";
 import {
   formatCurrency,
@@ -13,9 +18,11 @@ import {
 import { reviewSeller } from "@/store/slices/auctionSlice";
 import {
   fetchWonAuctions,
+  reportFulfillmentIssue,
   submitDeliveryAddress,
 } from "@/store/slices/userSlice";
 import {
+  AlertTriangle,
   CheckCircle2,
   ClipboardList,
   Mail,
@@ -106,6 +113,10 @@ const WonAuctionCard = ({ auction, currentUser }) => {
   const [addressForm, setAddressForm] = useState(() =>
     buildAddressForm(auction.fulfillment, currentUser)
   );
+  const [issueForm, setIssueForm] = useState({
+    issueType: "NotDelivered",
+    description: "",
+  });
   const handoff = auction.winnerHandoff || {};
   const seller = handoff.seller || {};
   const fulfillment = auction.fulfillment;
@@ -143,6 +154,18 @@ const WonAuctionCard = ({ auction, currentUser }) => {
   const handleAddressSubmit = (event) => {
     event.preventDefault();
     dispatch(submitDeliveryAddress(auction._id, addressForm));
+  };
+
+  const updateIssueField = (field, value) => {
+    setIssueForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleIssueSubmit = async (event) => {
+    event.preventDefault();
+    const response = await dispatch(reportFulfillmentIssue(auction._id, issueForm));
+    if (response?.success) {
+      setIssueForm({ issueType: "NotDelivered", description: "" });
+    }
   };
 
   return (
@@ -289,6 +312,13 @@ const WonAuctionCard = ({ auction, currentUser }) => {
         </section>
 
         <ShipmentPanel fulfillment={fulfillment} />
+
+        <DisputePanel
+          fulfillment={fulfillment}
+          issueForm={issueForm}
+          updateIssueField={updateIssueField}
+          onSubmit={handleIssueSubmit}
+        />
 
         <div className="grid gap-3 rounded-md bg-slate-50 p-3 md:grid-cols-[150px_1fr_auto] md:items-center">
           <label className="grid gap-1">
@@ -439,6 +469,102 @@ const ShipmentPanel = ({ fulfillment }) => {
             </div>
           ))}
         </div>
+      )}
+    </section>
+  );
+};
+
+const DisputePanel = ({ fulfillment, issueForm, updateIssueField, onSubmit }) => {
+  const dispute = fulfillment?.dispute;
+  const openDispute = hasOpenDispute(fulfillment);
+
+  return (
+    <section className="grid gap-4 rounded-md border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-amber-600" />
+          <h3 className="font-semibold text-slate-950">Delivery support</h3>
+        </div>
+        {dispute?.status && (
+          <span
+            className={`w-fit rounded-md px-3 py-2 text-sm font-bold ${getDisputeTone(
+              dispute.status
+            )}`}
+          >
+            {getDisputeLabel(dispute.status)}
+          </span>
+        )}
+      </div>
+
+      {dispute?.status ? (
+        <div className="grid gap-3 rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">
+          <div>
+            <p className="font-semibold text-slate-950">
+              {getIssueTypeLabel(dispute.issueType)}
+            </p>
+            <p className="mt-1">{dispute.description}</p>
+          </div>
+          {dispute.sellerResponse && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-800">
+              <p className="font-semibold">Seller response</p>
+              <p className="mt-1">{dispute.sellerResponse}</p>
+            </div>
+          )}
+          {dispute.adminResolution && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-800">
+              <p className="font-semibold">Admin resolution</p>
+              <p className="mt-1">{dispute.adminResolution}</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+          Report delivery problems from here. The seller and admin team will see the
+          issue with the shipment timeline.
+        </p>
+      )}
+
+      {!openDispute && (
+        <form className="grid gap-3 md:grid-cols-[220px_1fr_auto]" onSubmit={onSubmit}>
+          <label className="grid gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Issue
+            </span>
+            <select
+              value={issueForm.issueType}
+              onChange={(event) => updateIssueField("issueType", event.target.value)}
+              className={inputClass}
+            >
+              {disputeIssueTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              What happened?
+            </span>
+            <textarea
+              rows={2}
+              value={issueForm.description}
+              onChange={(event) => updateIssueField("description", event.target.value)}
+              className={`${inputClass} resize-y`}
+              placeholder="Describe the issue clearly"
+              required
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2 font-semibold text-amber-800 transition hover:bg-amber-100 md:w-auto"
+            >
+              <AlertTriangle className="h-5 w-5" />
+              Report
+            </button>
+          </div>
+        </form>
       )}
     </section>
   );

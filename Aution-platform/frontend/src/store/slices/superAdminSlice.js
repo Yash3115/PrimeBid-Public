@@ -17,6 +17,7 @@ const superAdminSlice = createSlice({
     kycSubmissions: [],
     auditLogs: [],
     withdrawalRequests: [],
+    fulfillmentDisputes: [],
   },
   reducers: {
     requestForMonthlyRevenue(state) {
@@ -71,6 +72,9 @@ const superAdminSlice = createSlice({
     },
     withdrawalRequestsSuccess(state, action) {
       state.withdrawalRequests = action.payload;
+    },
+    fulfillmentDisputesSuccess(state, action) {
+      state.fulfillmentDisputes = action.payload;
     },
     adminOverviewSuccess(state, action) {
       state.overview = action.payload;
@@ -234,6 +238,43 @@ export const reviewWithdrawalRequest =
         )
       );
       dispatch(getAuditLogs());
+      return response.data;
+    } catch (error) {
+      toastApiError(error);
+      return { success: false };
+    }
+  };
+
+export const getFulfillmentDisputes =
+  (status = "Open") =>
+  async (dispatch) => {
+    try {
+      const response = await api.get("/superadmin/fulfillment/disputes", {
+        params: { status },
+      });
+      dispatch(
+        superAdminSlice.actions.fulfillmentDisputesSuccess(
+          response.data.disputes
+        )
+      );
+    } catch (error) {
+      console.error(getErrorMessage(error));
+    }
+  };
+
+export const reviewFulfillmentDispute =
+  (id, data, currentFilter = "Open") =>
+  async (dispatch) => {
+    try {
+      const response = await api.put(
+        `/superadmin/fulfillment/disputes/${id}`,
+        data,
+        { headers: { "Content-Type": "application/json" } }
+      );
+      toast.success(response.data.message);
+      dispatch(getFulfillmentDisputes(currentFilter));
+      dispatch(getAuditLogs());
+      dispatch(getAdminOverview());
       return response.data;
     } catch (error) {
       toastApiError(error);

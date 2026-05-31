@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  DISPUTE_STATUS,
   FULFILLMENT_STATUS,
   canEditDeliveryAddress,
+  disputeIssueTypeOptions,
   getAuctionIdFromFulfillment,
+  getDisputeLabel,
+  getDisputeTone,
   getFulfillmentLabel,
   getFulfillmentTone,
+  getIssueTypeLabel,
+  hasOpenDispute,
   sellerShipmentStatusOptions,
 } from "../src/lib/fulfillment.js";
 
@@ -36,4 +42,19 @@ test("extracts auction id from populated or raw fulfillment objects", () => {
     "auction-1"
   );
   assert.equal(getAuctionIdFromFulfillment({ auction: "auction-2" }), "auction-2");
+});
+
+test("formats delivery dispute status and issue labels", () => {
+  assert.equal(getDisputeLabel(DISPUTE_STATUS.SELLER_RESPONDED), "Seller responded");
+  assert.ok(getDisputeTone(DISPUTE_STATUS.OPEN).includes("red"));
+  assert.equal(getIssueTypeLabel("DamagedItem"), "Item arrived damaged");
+  assert.equal(getIssueTypeLabel("Missing"), "Delivery issue");
+});
+
+test("detects open disputes and exposes buyer issue options", () => {
+  assert.equal(hasOpenDispute({ dispute: { isOpen: true } }), true);
+  assert.equal(hasOpenDispute({ dispute: { isOpen: false } }), false);
+  assert.ok(
+    disputeIssueTypeOptions.some((option) => option.value === "SellerUnresponsive")
+  );
 });

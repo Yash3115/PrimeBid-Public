@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  DISPUTE_STATUS,
   FULFILLMENT_STATUS,
   getFulfillmentProgress,
+  normalizeAdminDisputeReview,
   normalizeDeliveryAddress,
+  normalizeDisputeReport,
+  normalizeDisputeResponse,
   sellerManagedStatuses,
 } from "../utils/fulfillment.js";
 
@@ -64,4 +68,71 @@ test("tracks fulfillment progress and seller-managed statuses", () => {
   );
   assert.ok(sellerManagedStatuses.includes(FULFILLMENT_STATUS.SHIPPED));
   assert.ok(!sellerManagedStatuses.includes(FULFILLMENT_STATUS.AWAITING_ADDRESS));
+});
+
+test("normalizes buyer delivery issue reports", () => {
+  const report = normalizeDisputeReport({
+    issueType: "NotDelivered",
+    description: "  Tracking says delivered but I did not receive it.  ",
+  });
+
+  assert.deepEqual(report, {
+    issueType: "NotDelivered",
+    description: "Tracking says delivered but I did not receive it.",
+  });
+});
+
+test("rejects invalid or vague delivery issue reports", () => {
+  assert.throws(
+    () => normalizeDisputeReport({ issueType: "Unknown", description: "Valid enough text" }),
+    /valid issue type/
+  );
+  assert.throws(
+    () => normalizeDisputeReport({ issueType: "Other", description: "short" }),
+    /at least 10 characters/
+  );
+});
+
+test("normalizes seller dispute responses", () => {
+  assert.deepEqual(
+    normalizeDisputeResponse({
+      sellerResponse: "  I contacted the courier and shared the corrected tracking. ",
+    }),
+    {
+      sellerResponse: "I contacted the courier and shared the corrected tracking.",
+    }
+  );
+  assert.throws(
+    () => normalizeDisputeResponse({ sellerResponse: "too short" }),
+    /at least 10 characters/
+  );
+});
+
+test("requires admin resolution notes for final dispute decisions", () => {
+  assert.deepEqual(
+    normalizeAdminDisputeReview({
+      status: DISPUTE_STATUS.NEEDS_MORE_INFO,
+      adminResolution: "",
+    }),
+    {
+      status: DISPUTE_STATUS.NEEDS_MORE_INFO,
+      adminResolution: "",
+      isFinal: false,
+    }
+  );
+  assert.throws(
+    () =>
+      normalizeAdminDisputeReview({
+        status: DISPUTE_STATUS.BUYER_FAVORED,
+        adminResolution: "refund",
+      }),
+    /resolution note/
+  );
+  assert.equal(
+    normalizeAdminDisputeReview({
+      status: DISPUTE_STATUS.SELLER_FAVORED,
+      adminResolution: "Courier proof confirms delivery to the address on file.",
+    }).isFinal,
+    true
+  );
 });

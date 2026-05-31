@@ -405,6 +405,24 @@ export const updateFulfillmentStatus = (id, data) => async (dispatch) => {
   }
 };
 
+export const respondToFulfillmentIssue = (id, data) => async (dispatch) => {
+  try {
+    const response = await api.put(
+      `/auctionitem/fulfillment/${id}/issue-response`,
+      data,
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    toast.success(response.data.message);
+    dispatch(getSellerDashboard());
+    return response.data;
+  } catch (error) {
+    toastApiError(error);
+    return { success: false };
+  }
+};
+
 export const getSmartRecommendations = () => async (dispatch) => {
   try {
     const response = await api.get("/auctionitem/smart-recommendations");

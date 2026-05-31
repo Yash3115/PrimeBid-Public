@@ -15,6 +15,10 @@ import {
     fetchWithdrawalRequests,
     reviewWithdrawalRequest,
 } from "../controllers/walletController.js";
+import {
+    fetchFulfillmentDisputes,
+    reviewFulfillmentDispute,
+} from "../controllers/fulfillmentController.js";
 const router = express.Router();
 
 router.delete("/auctionitem/delete/:id",isAuth,isAuthorised("Super Admin"),removefromAuction);
@@ -28,6 +32,8 @@ router.put("/kyc/:id",isAuth,isAuthorised("Super Admin"),updateKycStatus)
 router.get("/audit-logs",isAuth,isAuthorised("Super Admin"),fetchAuditLogs)
 router.get("/wallet/withdrawals",isAuth,isAuthorised("Super Admin"),fetchWithdrawalRequests)
 router.put("/wallet/withdrawals/:id",isAuth,isAuthorised("Super Admin"),reviewWithdrawalRequest)
+router.get("/fulfillment/disputes",isAuth,isAuthorised("Super Admin"),fetchFulfillmentDisputes)
+router.put("/fulfillment/disputes/:id",isAuth,isAuthorised("Super Admin"),reviewFulfillmentDispute)
 
 router.get("/monthlyincome", isAuth, isAuthorised("Super Admin"),monthlyRevenue);
 export default router;

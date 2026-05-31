@@ -280,6 +280,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         totalBids,
         withdrawalAmountRows,
         fulfillmentRows,
+        openDisputeCount,
         platformAccount,
         recentPlatformTransactions,
         recentAuctions,
@@ -321,6 +322,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         Fulfillment.aggregate([
             { $group: { _id: "$status", count: { $sum: 1 } } },
         ]),
+        Fulfillment.countDocuments({ "dispute.isOpen": true }),
         getOrCreatePlatformAccount(),
         PlatformTransaction.find().sort({ createdAt: -1 }).limit(5).lean(),
         Auction.find()
@@ -353,7 +355,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         pendingWithdrawals: withdrawalsByStatus.Pending?.count,
         awaitingAddress: fulfillment.AwaitingAddress,
         readyToShip: fulfillment.ReadyToShip,
-        issueReported: fulfillment.IssueReported,
+        issueReported: openDisputeCount || fulfillment.IssueReported,
         atRiskAuctions: activeNoBidAuctions,
     });
 
@@ -377,6 +379,9 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
                 byStatus: withdrawalsByStatus,
             },
             fulfillment,
+            disputes: {
+                open: openDisputeCount,
+            },
             platform: getPlatformSnapshot(platformAccount),
             actionQueue,
             recentPlatformTransactions,

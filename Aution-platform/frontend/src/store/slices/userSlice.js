@@ -367,6 +367,25 @@ export const submitDeliveryAddress = (id, data) => async (dispatch) => {
   }
 };
 
+export const reportFulfillmentIssue = (id, data) => async (dispatch) => {
+  try {
+    const response = await api.post(`/user/won-auctions/${id}/issue`, data, {
+      headers: { "Content-Type": "application/json" },
+    });
+    dispatch(
+      userSlice.actions.wonAuctionFulfillmentSuccess(
+        response.data.fulfillment
+      )
+    );
+    toast.success(response.data.message);
+    dispatch(fetchNotifications());
+    return response.data;
+  } catch (error) {
+    toastApiError(error);
+    return { success: false };
+  }
+};
+
 export const fetchNotifications = () => async (dispatch) => {
   try {
     const response = await api.get("/user/notifications");

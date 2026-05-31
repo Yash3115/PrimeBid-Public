@@ -37,6 +37,60 @@ const timelineSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const disputeSchema = new mongoose.Schema(
+  {
+    isOpen: { type: Boolean, default: false },
+    issueType: {
+      type: String,
+      enum: [
+        "NotDelivered",
+        "DamagedItem",
+        "WrongItem",
+        "TrackingProblem",
+        "SellerUnresponsive",
+        "Other",
+      ],
+    },
+    description: { type: String, trim: true },
+    status: {
+      type: String,
+      enum: [
+        "Open",
+        "SellerResponded",
+        "NeedsMoreInfo",
+        "Resolved",
+        "BuyerFavored",
+        "SellerFavored",
+      ],
+    },
+    previousFulfillmentStatus: {
+      type: String,
+      enum: [
+        "AwaitingAddress",
+        "ReadyToShip",
+        "Shipped",
+        "OutForDelivery",
+        "Delivered",
+        "IssueReported",
+      ],
+    },
+    reportedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    reportedAt: Date,
+    sellerResponse: { type: String, trim: true },
+    sellerRespondedAt: Date,
+    adminResolution: { type: String, trim: true },
+    adminReviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    adminReviewedAt: Date,
+  },
+  { _id: false }
+);
+
 const fulfillmentSchema = new mongoose.Schema(
   {
     auction: {
@@ -83,6 +137,7 @@ const fulfillmentSchema = new mongoose.Schema(
     },
     deliveryAddress: deliveryAddressSchema,
     addressSubmittedAt: Date,
+    dispute: disputeSchema,
     shipping: {
       carrier: { type: String, trim: true },
       trackingNumber: { type: String, trim: true },
@@ -100,6 +155,7 @@ const fulfillmentSchema = new mongoose.Schema(
 fulfillmentSchema.index({ bidder: 1, updatedAt: -1 });
 fulfillmentSchema.index({ seller: 1, status: 1, updatedAt: -1 });
 fulfillmentSchema.index({ auction: 1, bidder: 1 });
+fulfillmentSchema.index({ "dispute.isOpen": 1, updatedAt: -1 });
 
 const Fulfillment = mongoose.model("Fulfillment", fulfillmentSchema);
 

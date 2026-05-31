@@ -20,6 +20,7 @@ import {
   Trash2,
   Users,
   Wallet,
+  AlertTriangle,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -31,6 +32,7 @@ import PaymentGraph from "./sub-components/PaymentGraph";
 import UserManagement from "./sub-components/UserManagement";
 import KycManagement from "./sub-components/KycManagement";
 import WithdrawalManagement from "./sub-components/WithdrawalManagement";
+import DisputeManagement from "./sub-components/DisputeManagement";
 
 /* eslint-disable react/prop-types */
 
@@ -78,6 +80,7 @@ const Dashboard = () => {
     { icon: Users, title: "User Management", id: "user-management", content: <UserManagement /> },
     { icon: BadgeIndianRupee, title: "Auctioneer KYC", id: "kyc", content: <KycManagement /> },
     { icon: BadgeIndianRupee, title: "Wallet Withdrawals", id: "withdrawals", content: <WithdrawalManagement /> },
+    { icon: AlertTriangle, title: "Delivery Disputes", id: "disputes", content: <DisputeManagement /> },
     { icon: BarChart3, title: "Audit Log", id: "audit-log", content: <AuditLogs /> },
     {
       icon: Trash2,
@@ -153,7 +156,7 @@ const Dashboard = () => {
       icon: PackageCheck,
       label: "Fulfillment Queue",
       value: overview?.fulfillment?.ReadyToShip || 0,
-      detail: `${overview?.fulfillment?.AwaitingAddress || 0} awaiting address`,
+      detail: `${overview?.disputes?.open || overview?.fulfillment?.IssueReported || 0} open disputes`,
     },
   ];
   const opsQueue =
@@ -320,7 +323,7 @@ const OperationsPulse = ({ overview, opsQueue }) => {
     ["Ready to ship", overview?.fulfillment?.ReadyToShip || 0],
     ["Shipped", overview?.fulfillment?.Shipped || 0],
     ["Out for delivery", overview?.fulfillment?.OutForDelivery || 0],
-    ["Issues", overview?.fulfillment?.IssueReported || 0],
+    ["Open disputes", overview?.disputes?.open || overview?.fulfillment?.IssueReported || 0],
   ];
 
   return (

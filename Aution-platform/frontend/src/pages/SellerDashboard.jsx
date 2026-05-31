@@ -3,9 +3,13 @@ import ActionCenter from "@/custom-components/ActionCenter";
 import { buildSellerNextActions } from "@/lib/actionInsights";
 import {
   FULFILLMENT_STATUS,
+  getDisputeLabel,
+  getDisputeTone,
   getAuctionIdFromFulfillment,
   getFulfillmentLabel,
   getFulfillmentTone,
+  getIssueTypeLabel,
+  hasOpenDispute,
   sellerShipmentStatusOptions,
 } from "@/lib/fulfillment";
 import {
@@ -16,10 +20,12 @@ import {
 } from "@/lib/format";
 import {
   getSellerDashboard,
+  respondToFulfillmentIssue,
   updateFulfillmentStatus,
 } from "@/store/slices/auctionSlice";
 import { fetchWallet } from "@/store/slices/walletSlice";
 import {
+  AlertTriangle,
   ArrowUpFromLine,
   Clock3,
   Eye,
@@ -438,6 +444,8 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
   const bidder = fulfillment.bidder || {};
   const address = fulfillment.deliveryAddress;
   const shipping = fulfillment.shipping || {};
+  const dispute = fulfillment.dispute;
+  const openDispute = hasOpenDispute(fulfillment);
   const [form, setForm] = useState({
     status: getInitialSellerStatus(fulfillment.status),
     carrier: shipping.carrier || "",
@@ -446,6 +454,9 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
     estimatedDeliveryDate: toDateInputValue(shipping.estimatedDeliveryDate),
     sellerNote: shipping.sellerNote || "",
   });
+  const [sellerResponse, setSellerResponse] = useState(
+    dispute?.sellerResponse || ""
+  );
   const hasAddress = Boolean(address?.addressLine1);
   const auctionId = getAuctionIdFromFulfillment(fulfillment);
 
@@ -458,7 +469,8 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
       estimatedDeliveryDate: toDateInputValue(shipping.estimatedDeliveryDate),
       sellerNote: shipping.sellerNote || "",
     });
-  }, [fulfillment.status, shipping.carrier, shipping.estimatedDeliveryDate, shipping.sellerNote, shipping.trackingNumber, shipping.trackingUrl]);
+    setSellerResponse(dispute?.sellerResponse || "");
+  }, [dispute?.sellerResponse, fulfillment.status, shipping.carrier, shipping.estimatedDeliveryDate, shipping.sellerNote, shipping.trackingNumber, shipping.trackingUrl]);
 
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -467,6 +479,15 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
   const handleSubmit = (event) => {
     event.preventDefault();
     dispatch(updateFulfillmentStatus(auctionId, form));
+  };
+
+  const handleDisputeResponse = async (event) => {
+    event.preventDefault();
+    await dispatch(
+      respondToFulfillmentIssue(auctionId, {
+        sellerResponse,
+      })
+    );
   };
 
   return (
@@ -517,6 +538,16 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
             Waiting for the bidder to add delivery details. Shipment updates are
             disabled until the address is submitted.
           </div>
+        )}
+
+        {dispute?.status && (
+          <DisputeResponsePanel
+            dispute={dispute}
+            openDispute={openDispute}
+            sellerResponse={sellerResponse}
+            setSellerResponse={setSellerResponse}
+            onSubmit={handleDisputeResponse}
+          />
         )}
 
         <form className="grid gap-3 md:grid-cols-2" onSubmit={handleSubmit}>
@@ -615,5 +646,74 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
     </div>
   );
 };
+
+const DisputeResponsePanel = ({
+  dispute,
+  openDispute,
+  sellerResponse,
+  setSellerResponse,
+  onSubmit,
+}) => (
+  <section className="grid gap-3 rounded-md border border-red-200 bg-red-50 p-3">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-red-700">
+          Buyer issue
+        </p>
+        <h3 className="mt-1 font-semibold text-red-950">
+          {getIssueTypeLabel(dispute.issueType)}
+        </h3>
+      </div>
+      <span
+        className={`w-fit rounded-md px-3 py-2 text-sm font-bold ${getDisputeTone(
+          dispute.status
+        )}`}
+      >
+        {getDisputeLabel(dispute.status)}
+      </span>
+    </div>
+
+    <p className="text-sm leading-6 text-red-900">{dispute.description}</p>
+
+    {dispute.adminResolution && (
+      <div className="rounded-md border border-emerald-200 bg-white p-3 text-sm text-emerald-800">
+        <p className="font-semibold">Admin resolution</p>
+        <p className="mt-1">{dispute.adminResolution}</p>
+      </div>
+    )}
+
+    {openDispute ? (
+      <form className="grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={onSubmit}>
+        <label className="grid gap-1">
+          <span className="text-xs font-semibold uppercase tracking-[0.12em] text-red-700">
+            Seller response
+          </span>
+          <textarea
+            rows={2}
+            value={sellerResponse}
+            onChange={(event) => setSellerResponse(event.target.value)}
+            className={`${sellerInputClass} resize-y`}
+            placeholder="Explain shipment status, next step, refund handling, or tracking correction"
+            required
+          />
+        </label>
+        <div className="flex items-end">
+          <button
+            type="submit"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-red-600 px-4 py-2 font-semibold text-white transition hover:bg-red-700 md:w-auto"
+          >
+            <AlertTriangle className="h-5 w-5" />
+            Respond
+          </button>
+        </div>
+      </form>
+    ) : (
+      <p className="rounded-md bg-white p-3 text-sm text-red-800">
+        This dispute is closed. Keep shipment records available until the handoff is
+        fully complete.
+      </p>
+    )}
+  </section>
+);
 
 export default SellerDashboard;
