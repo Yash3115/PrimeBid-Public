@@ -69,12 +69,20 @@ test("notification helpers group and route common alerts", () => {
   const notifications = [
     { _id: "1", type: "outbid", read: false, auction: { _id: "auction-1" } },
     { _id: "2", type: "wallet", read: true },
-    { _id: "3", type: "auction_won", read: false },
+    {
+      _id: "3",
+      type: "auction_won",
+      read: false,
+      actionPath: "/won-auctions#won-auction-auction-3",
+    },
   ];
 
   assert.equal(getNotificationMeta(notifications[0]).group, "bids");
   assert.equal(getNotificationMeta(notifications[0]).actionPath, "/auction/item/auction-1");
-  assert.equal(getNotificationMeta(notifications[2]).actionPath, "/won-auctions");
+  assert.equal(
+    getNotificationMeta(notifications[2]).actionPath,
+    "/won-auctions#won-auction-auction-3"
+  );
   assert.equal(filterNotifications(notifications, "unread").length, 2);
   assert.equal(filterNotifications(notifications, "wallet").length, 1);
 });

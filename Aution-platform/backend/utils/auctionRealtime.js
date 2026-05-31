@@ -36,6 +36,10 @@ export const buildAuctionSyncSnapshot = (auction, now = new Date()) => {
       ? new Date(auction.lastBidAt).toISOString()
       : null,
     leadingBidderId: toId(leadingBid?.userId),
+    highestBidder: toId(auction?.highestBidder),
+    closureStatus: auction?.closureStatus || "Open",
+    closedAt: auction?.closedAt ? new Date(auction.closedAt).toISOString() : null,
+    closureError: auction?.closureError || "",
     runtimeStatus: timing.runtimeStatus,
     isBiddable: timing.isBiddable,
     serverTime: timing.serverTime,

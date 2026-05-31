@@ -22,11 +22,17 @@ import {
 import {
   checkAuctionSync,
   getAuctionDetail,
+  getSellerDashboard,
   getBidAdvice,
   summarizeAuction,
 } from "@/store/slices/auctionSlice";
 import { manageAutoBid, placeBid } from "@/store/slices/bidSlice";
-import { addToWatchlist, removeFromWatchlist } from "@/store/slices/userSlice";
+import {
+  addToWatchlist,
+  fetchNotifications,
+  fetchWonAuctions,
+  removeFromWatchlist,
+} from "@/store/slices/userSlice";
 import { fetchWallet } from "@/store/slices/walletSlice";
 import {
   BadgeCheck,
@@ -87,6 +93,8 @@ const AuctionItem = () => {
     serverTimeReceivedAt
   );
   const isLive = status === "Live" && auctionDetail.status !== "Draft";
+  const closureStatus = auctionDetail.closureStatus || "Open";
+  const fulfillmentSummary = auctionDetail.fulfillmentSummary;
   const currentBid = Number(auctionDetail.currentBid || auctionDetail.startingBid || 0);
   const bidIncrement = Number(auctionDetail.minimumBidIncrement || 1);
   const nextBid = currentBid + bidIncrement;
@@ -94,6 +102,8 @@ const AuctionItem = () => {
   const sellerQuality = getSellerQuality(auctionDetail);
   const isOwnAuction =
     createdById?.toString?.() === user?._id?.toString?.();
+  const userWon =
+    auctionDetail.highestBidder?.toString?.() === user?._id?.toString?.();
   const isSaved = watchlist.some((auction) => auction._id === auctionDetail._id);
   const bidAmount = Number(amount);
   const maxAutoBidAmount = maxAutoBid === "" ? null : Number(maxAutoBid);
@@ -236,10 +246,25 @@ const AuctionItem = () => {
     dispatch(getBidAdvice(getAiAuctionPayload(), amount || nextBid));
   };
 
-  const refreshLiveAuction = () => {
+  const refreshLiveAuction = (snapshot, event = {}) => {
+    const closedEvent =
+      event?.type === "auction_closed" || snapshot?.runtimeStatus === "Ended";
     dispatch(getAuctionDetail(id, { silent: true }));
-    if (isAuthenticated && user?.role === "Bidder") {
+    if (!isAuthenticated) return;
+
+    if (closedEvent) {
+      dispatch(fetchNotifications());
+    }
+
+    if (user?.role === "Bidder") {
       dispatch(fetchWallet());
+      if (closedEvent) {
+        dispatch(fetchWonAuctions());
+      }
+    }
+
+    if (user?.role === "Auctioneer" && closedEvent) {
+      dispatch(getSellerDashboard());
     }
   };
 
@@ -386,6 +411,14 @@ const AuctionItem = () => {
                     <TrustNote icon={BadgeCheck} text="Winning bid settles automatically" />
                     <TrustNote icon={Timer} text={`${auctionDetail.antiSnipingExtensionMinutes || 0} min anti-sniping extension`} />
                   </div>
+                  {status === "Ended" && (
+                    <PostCloseNotice
+                      closureStatus={closureStatus}
+                      fulfillmentSummary={fulfillmentSummary}
+                      isOwnAuction={isOwnAuction}
+                      userWon={userWon}
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -715,12 +748,32 @@ const AuctionItem = () => {
                     </div>
                   )
                 ) : (
-                  <p className="flex items-center gap-2 font-semibold text-white">
-                    <Timer className="h-5 w-5 text-indigo-300" />
-                    {status === "Upcoming"
-                      ? "Auction has not started yet."
-                      : "Auction has ended."}
-                  </p>
+                  <div className="grid gap-3 text-white">
+                    <p className="flex items-center gap-2 font-semibold">
+                      <Timer className="h-5 w-5 text-indigo-300" />
+                      {status === "Upcoming"
+                        ? "Auction has not started yet."
+                        : closureStatus === "Processing"
+                          ? "Auction ended. PrimeBid is finalizing the winner and escrow."
+                          : "Auction has ended."}
+                    </p>
+                    {status === "Ended" && userWon && (
+                      <Link
+                        to={`/won-auctions#won-auction-${auctionDetail._id}`}
+                        className="inline-flex min-h-11 w-fit items-center justify-center rounded-md bg-white px-4 py-2 font-bold text-slate-950 transition hover:bg-indigo-50"
+                      >
+                        Add delivery address
+                      </Link>
+                    )}
+                    {status === "Ended" && isOwnAuction && (
+                      <Link
+                        to="/seller-dashboard#fulfillment"
+                        className="inline-flex min-h-11 w-fit items-center justify-center rounded-md bg-white px-4 py-2 font-bold text-slate-950 transition hover:bg-indigo-50"
+                      >
+                        Open fulfillment queue
+                      </Link>
+                    )}
+                  </div>
                 )}
               </form>
             </div>
@@ -825,6 +878,46 @@ const SellerTrustPanel = ({ seller, quality }) => {
         ))}
       </div>
     </aside>
+  );
+};
+
+const PostCloseNotice = ({
+  closureStatus,
+  fulfillmentSummary,
+  isOwnAuction,
+  userWon,
+}) => {
+  const settlementStatus = fulfillmentSummary?.settlementStatus;
+  const hasAddress = Boolean(fulfillmentSummary?.hasDeliveryAddress);
+  const copy =
+    closureStatus === "Processing"
+      ? "PrimeBid is finalizing the winner, escrow, and handoff."
+      : closureStatus === "NoWinner"
+        ? "No valid winning bid was available for this auction."
+        : closureStatus === "NeedsReview"
+          ? "The auction has a winner, but settlement needs admin review before shipment."
+          : userWon
+            ? hasAddress
+              ? "Your delivery address is saved. Track shipment updates from Won Auctions."
+              : "You won this auction. Add your delivery address so the seller can ship."
+            : isOwnAuction
+              ? hasAddress
+                ? "The winner has added an address. Continue from your fulfillment queue."
+                : "PrimeBid notified the winner to add a delivery address."
+              : "Winner handoff is being managed through PrimeBid escrow.";
+
+  return (
+    <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+      <p className="text-sm font-bold text-slate-950">
+        {closureStatus === "Closed" ? "Auction closed" : closureStatus}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{copy}</p>
+      {settlementStatus && (
+        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+          Settlement: {settlementStatus}
+        </p>
+      )}
+    </div>
   );
 };
 

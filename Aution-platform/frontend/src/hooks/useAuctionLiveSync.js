@@ -40,7 +40,7 @@ export const useAuctionLiveSync = ({
         const snapshot = payload.snapshot;
         if (!snapshot) return;
         const nextVersion = Number(snapshot.bidVersion || 0);
-        if (nextVersion !== versionRef.current) {
+        if (payload.type === "auction_closed" || nextVersion !== versionRef.current) {
           onChangeRef.current?.(snapshot, payload);
         }
       } catch {

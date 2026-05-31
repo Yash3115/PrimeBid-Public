@@ -110,6 +110,24 @@ const auctionschema = new mongoose.Schema({
     closedAt:{
         type:Date
     },
+    closureStatus:{
+        type:String,
+        enum:["Open","Processing","Closed","NeedsReview","NoWinner","Failed"],
+        default:"Open"
+    },
+    closureClaimedAt:{
+        type:Date
+    },
+    closureReason:{
+        type:String
+    },
+    closureError:{
+        type:String
+    },
+    winnerStatsRecorded:{
+        type:Boolean,
+        default:false
+    },
 }, { timestamps: true })
 
 auctionschema.index({ status: 1, startTime: 1, endTime: 1 });
@@ -119,6 +137,7 @@ auctionschema.index({ highestBidder: 1, endTime: -1 });
 auctionschema.index({ status: 1, category: 1, currentBid: 1, endTime: 1 });
 auctionschema.index({ status: 1, createdAt: -1 });
 auctionschema.index({ _id: 1, bidVersion: 1 });
+auctionschema.index({ status: 1, closureStatus: 1, endTime: 1 });
 
 const Auction = new mongoose.model("Auction",auctionschema);
 export default Auction;

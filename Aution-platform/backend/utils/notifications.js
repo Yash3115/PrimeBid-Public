@@ -7,15 +7,27 @@ export const createNotification = async ({
     title,
     message,
     actionPath,
+    dedupeKey,
 }) => {
     if (!user || !title || !message) return null;
 
-    return Notification.create({
+    const payload = {
         user,
         auction,
         type,
         title,
         message,
         actionPath,
-    });
+        dedupeKey,
+    };
+
+    if (dedupeKey) {
+        return Notification.findOneAndUpdate(
+            { dedupeKey },
+            { $setOnInsert: payload },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+    }
+
+    return Notification.create(payload);
 };

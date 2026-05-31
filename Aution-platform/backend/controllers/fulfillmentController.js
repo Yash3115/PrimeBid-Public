@@ -142,7 +142,7 @@ export const submitDeliveryAddress = asyncErrorHandler(async (req, res, next) =>
     type: "fulfillment",
     title: "Delivery address added",
     message: `${req.user.userName} added delivery details. You can prepare and ship the item now.`,
-    actionPath: "/seller-dashboard",
+    actionPath: "/seller-dashboard#fulfillment",
   });
 
   const populated = await Fulfillment.findById(fulfillment._id).populate(
@@ -182,6 +182,14 @@ export const updateShipmentStatus = asyncErrorHandler(async (req, res, next) => 
   if (!fulfillment.deliveryAddress?.addressLine1 && status !== FULFILLMENT_STATUS.ISSUE_REPORTED) {
     const err = new Error("Buyer delivery address is required before shipment updates");
     err.statusCode = 400;
+    return next(err);
+  }
+  if (
+    fulfillment.settlementStatus === SETTLEMENT_STATUS.NEEDS_REVIEW &&
+    status !== FULFILLMENT_STATUS.ISSUE_REPORTED
+  ) {
+    const err = new Error("Shipment is blocked until the wallet settlement is reviewed");
+    err.statusCode = 409;
     return next(err);
   }
 

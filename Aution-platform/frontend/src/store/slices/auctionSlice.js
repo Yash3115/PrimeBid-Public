@@ -149,6 +149,10 @@ const auctionSlice = createSlice({
           lastBidAt: snapshot.lastBidAt,
           runtimeStatus: snapshot.runtimeStatus,
           isBiddable: snapshot.isBiddable,
+          highestBidder: snapshot.highestBidder || state.auctionDetail.highestBidder,
+          closureStatus: snapshot.closureStatus || state.auctionDetail.closureStatus,
+          closureError: snapshot.closureError || "",
+          closedAt: snapshot.closedAt || state.auctionDetail.closedAt,
         };
       }
     },

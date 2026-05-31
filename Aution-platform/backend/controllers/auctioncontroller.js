@@ -13,6 +13,7 @@ import {
     withAuctionTiming,
     withAuctionTimings,
 } from "../utils/auctionStatus.js";
+import { buildAuctionHealth } from "../utils/auctionHealth.js";
 import { storeUploadedFile } from "../utils/fileStorage.js";
 import { SETTLEMENT_STATUS } from "../utils/fulfillment.js";
 import {
@@ -32,11 +33,51 @@ import {
     publishAuctionEvent,
     subscribeAuctionEvents,
 } from "../utils/auctionRealtime.js";
+import {
+    closeEndedAuctions,
+    repairClosedAuction,
+} from "../utils/auctionClosing.js";
 
 const allowedImageFormats = ["image/png", "image/jpeg", "image/webp"];
 
+const getAuctionWatcherCounts = async (auctionIds = []) => {
+    const ids = auctionIds.filter(Boolean);
+    if (!ids.length) return new Map();
+
+    const rows = await User.aggregate([
+        { $match: { watchlist: { $in: ids } } },
+        { $unwind: "$watchlist" },
+        { $match: { watchlist: { $in: ids } } },
+        { $group: { _id: "$watchlist", count: { $sum: 1 } } },
+    ]);
+
+    return new Map(rows.map((row) => [row._id.toString(), row.count]));
+};
+
+const withSellerAuctionHealth = (items, now, watcherCounts = new Map()) =>
+    withAuctionTimings(items, now).map((item) => ({
+        ...item,
+        auctionHealth: buildAuctionHealth(item, {
+            now,
+            watcherCount: watcherCounts.get(item._id?.toString?.()) || 0,
+        }),
+    }));
+
 const toSellerId = (seller) =>
     seller?._id?.toString?.() || seller?.toString?.() || "";
+
+const buildFulfillmentSummary = (fulfillment) => {
+    if (!fulfillment) return null;
+    return {
+        id: fulfillment._id,
+        status: fulfillment.status,
+        settlementStatus: fulfillment.settlementStatus,
+        winningAmount: fulfillment.winningAmount,
+        hasDeliveryAddress: Boolean(fulfillment.deliveryAddress?.addressLine1),
+        addressSubmittedAt: fulfillment.addressSubmittedAt,
+        updatedAt: fulfillment.updatedAt,
+    };
+};
 
 const attachSellerQuality = async (items, now, sellerAuctions = items) => {
     const timedItems = withAuctionTimings(items, now);
@@ -234,6 +275,11 @@ const addnewAuction = asyncErrorHandler(async (req, res, next) => {
 
 const getAllItem = asyncErrorHandler(async(req,res,next)=>{
     const now = new Date();
+    await closeEndedAuctions({
+        now,
+        reason: "marketplace-read",
+        limit: 5,
+    });
     const marketplaceQuery = buildMarketplaceQuery(req.query, now);
     const statusList = [
         MARKETPLACE_STATUS.LIVE,
@@ -348,11 +394,17 @@ const saveAuctionDraft = asyncErrorHandler(async(req,res,next)=>{
 
 const getMyAuctionItems = asyncErrorHandler(async(req,res,next)=>{
     const now = new Date();
+    await closeEndedAuctions({
+        now,
+        reason: "seller-auctions-read",
+        limit: 10,
+    });
     const items = await Auction.find({createdBy: req.user._id});
+    const watcherCounts = await getAuctionWatcherCounts(items.map((item) => item._id));
     return res.status(200).json({
         success: true,
         serverTime: now.toISOString(),
-        items: withAuctionTimings(items, now),
+        items: withSellerAuctionHealth(items, now, watcherCounts),
     })
 })
 
@@ -365,24 +417,49 @@ const getAuctionDetails = asyncErrorHandler(async(req,res,next)=>{
         return next(err);
     }
 
-    const auctionItem = await Auction.findById(id).populate(
+    let auctionItem = await Auction.findById(id).populate(
         "createdBy",
-        "userName email reputation kycStatus accountStatus createdAt"
+        "userName reputation kycStatus accountStatus createdAt"
     );
     if(!auctionItem){
         const err = new Error("Auction not found");
         err.statusCode = 404;
         return next(err);
     }
+    const requesterId = req.user?._id?.toString?.();
+    const ownerId = auctionItem.createdBy?._id?.toString?.() || auctionItem.createdBy?.toString?.();
+    const canViewDraft = requesterId && (requesterId === ownerId || req.user?.role === "Super Admin");
+    if(auctionItem.status === "Draft" && !canViewDraft){
+        const err = new Error("Auction not found");
+        err.statusCode = 404;
+        return next(err);
+    }
+    if(getAuctionTiming(auctionItem, now).runtimeStatus === AUCTION_RUNTIME_STATUS.ENDED){
+        await repairClosedAuction(auctionItem._id, {
+            now,
+            reason: "auction-detail-read",
+        });
+        auctionItem = await Auction.findById(id).populate(
+            "createdBy",
+            "userName reputation kycStatus accountStatus createdAt"
+        );
+    }
     const bidders = [...auctionItem.bids].sort((a,b)=> b.amount-a.amount);
     const myAutoBid = req.user?._id
         ? findAutoBidByUser(auctionItem.autoBids, req.user._id)
         : null;
     const [auctionWithQuality] = await attachSellerQuality([auctionItem], now, null);
+    const fulfillment = await Fulfillment.findOne({ auction: auctionItem._id })
+        .select("status settlementStatus winningAmount deliveryAddress addressSubmittedAt updatedAt")
+        .lean();
+    const auctionPayload = {
+        ...(auctionWithQuality || withAuctionTiming(auctionItem, now)),
+        fulfillmentSummary: buildFulfillmentSummary(fulfillment),
+    };
     return res.status(200).json({
         success: true,
         serverTime: now.toISOString(),
-        auctionItem: auctionWithQuality || withAuctionTiming(auctionItem, now),
+        auctionItem: auctionPayload,
         bidders,
         myAutoBid: myAutoBid
             ? {
@@ -410,8 +487,8 @@ const getAuctionSync = asyncErrorHandler(async(req,res,next)=>{
         err.statusCode = 400;
         return next(err);
     }
-    const auctionItem = await Auction.findById(id).select(
-        "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt"
+    let auctionItem = await Auction.findById(id).select(
+        "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt highestBidder closedAt closureStatus closureError"
     );
     if(!auctionItem){
         const err = new Error("Auction not found");
@@ -422,6 +499,15 @@ const getAuctionSync = asyncErrorHandler(async(req,res,next)=>{
         const err = new Error("Auction not found");
         err.statusCode = 404;
         return next(err);
+    }
+    if(getAuctionTiming(auctionItem, now).runtimeStatus === AUCTION_RUNTIME_STATUS.ENDED){
+        await repairClosedAuction(auctionItem._id, {
+            now,
+            reason: "auction-sync-read",
+        });
+        auctionItem = await Auction.findById(id).select(
+            "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt highestBidder closedAt closureStatus closureError"
+        );
     }
     return res.status(200).json({
         success: true,
@@ -438,13 +524,22 @@ const streamAuctionEvents = asyncErrorHandler(async(req,res,next)=>{
         err.statusCode = 400;
         return next(err);
     }
-    const auctionItem = await Auction.findById(id).select(
-        "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt"
+    let auctionItem = await Auction.findById(id).select(
+        "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt highestBidder closedAt closureStatus closureError"
     );
     if(!auctionItem || (auctionItem.status === "Draft" && !canViewDraftAuction(auctionItem, req.user))){
         const err = new Error("Auction not found");
         err.statusCode = 404;
         return next(err);
+    }
+    if(getAuctionTiming(auctionItem, now).runtimeStatus === AUCTION_RUNTIME_STATUS.ENDED){
+        await repairClosedAuction(auctionItem._id, {
+            now,
+            reason: "auction-stream-read",
+        });
+        auctionItem = await Auction.findById(id).select(
+            "createdBy currentBid startingBid bids endTime startTime status bidVersion lastBidAt highestBidder closedAt closureStatus closureError"
+        );
     }
 
     res.setHeader("Content-Type", "text/event-stream");
@@ -717,8 +812,20 @@ const publishAuctionDraft = asyncErrorHandler(async(req,res,next)=>{
 });
 
 const getSellerDashboard = asyncErrorHandler(async(req,res,next)=>{
-    const items = await Auction.find({ createdBy: req.user._id });
     const now = new Date();
+    await closeEndedAuctions({
+        now,
+        reason: "seller-dashboard-read",
+        limit: 10,
+    });
+    const items = await Auction.find({ createdBy: req.user._id });
+    const watcherCounts = await getAuctionWatcherCounts(items.map((item) => item._id));
+    const sellerItemsWithHealth = withSellerAuctionHealth(items, now, watcherCounts);
+    const itemWithHealthById = new Map(
+        sellerItemsWithHealth.map((item) => [item._id.toString(), item])
+    );
+    const attachHealth = (list) =>
+        list.map((item) => itemWithHealthById.get(item._id.toString()) || item);
     const published = items.filter((item) => item.status !== "Draft");
     const live = published.filter((item) => getAuctionTiming(item, now).runtimeStatus === AUCTION_RUNTIME_STATUS.LIVE);
     const ended = published.filter((item) => getAuctionTiming(item, now).runtimeStatus === AUCTION_RUNTIME_STATUS.ENDED);
@@ -748,6 +855,22 @@ const getSellerDashboard = asyncErrorHandler(async(req,res,next)=>{
         .sort(byEndingSoon)
         .slice(0, 5);
     const recentAuctions = [...items].sort(byRecentUpdate).slice(0, 6);
+    const healthQueue = sellerItemsWithHealth
+        .filter((item) =>
+            [AUCTION_RUNTIME_STATUS.LIVE, AUCTION_RUNTIME_STATUS.UPCOMING].includes(
+                item.runtimeStatus
+            ) && ["At Risk", "Needs Attention"].includes(item.auctionHealth?.label)
+        )
+        .sort((a, b) => a.auctionHealth.score - b.auctionHealth.score)
+        .slice(0, 5);
+    const healthSummary = sellerItemsWithHealth.reduce(
+        (summary, item) => {
+            const label = item.auctionHealth?.label || "Unknown";
+            summary[label] = (summary[label] || 0) + 1;
+            return summary;
+        },
+        {}
+    );
     const fulfillmentQueue = await Fulfillment.find({
         seller: req.user._id,
         $or: [
@@ -790,11 +913,13 @@ const getSellerDashboard = asyncErrorHandler(async(req,res,next)=>{
             fulfillment: fulfillmentStats,
             reputation: req.user.reputation || { ratingAverage: 0, ratingCount: 0 },
             sellerQuality,
+            health: healthSummary,
         },
-        topAuction: topAuction ? withAuctionTiming(topAuction, now) : null,
-        endingSoon: withAuctionTimings(endingSoon, now),
-        noBidAuctions: withAuctionTimings(noBidAuctions, now),
-        recentAuctions: withAuctionTimings(recentAuctions, now),
+        topAuction: topAuction ? itemWithHealthById.get(topAuction._id.toString()) || withAuctionTiming(topAuction, now) : null,
+        endingSoon: attachHealth(endingSoon),
+        noBidAuctions: attachHealth(noBidAuctions),
+        recentAuctions: attachHealth(recentAuctions),
+        healthQueue,
         fulfillmentQueue,
         recentReviews: reviews,
     });

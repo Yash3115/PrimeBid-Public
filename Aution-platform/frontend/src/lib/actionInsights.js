@@ -267,7 +267,7 @@ export const buildSellerNextActions = ({
       count: Math.max(healthQueue.length, noBidAuctions.length),
       detail: "Refresh weak listings before they close without bids.",
       actionLabel: "Review health",
-      to: "#seller-attention",
+      to: "#health",
       priority: "medium",
     });
   }
@@ -362,7 +362,7 @@ export const getNotificationMeta = (notification = {}) => {
   const meta = byType[type] || byType.admin;
   return {
     ...meta,
-    actionPath: meta.actionPath || actionPath,
+    actionPath: notification.actionPath || meta.actionPath || actionPath,
   };
 };
 

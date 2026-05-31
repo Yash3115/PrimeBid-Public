@@ -9,6 +9,7 @@ import asyncErrorHandler from '../middlewares/asyncErrorHandler.js';
 import { storeUploadedFile } from "../utils/fileStorage.js";
 import { withAuctionTimings } from "../utils/auctionStatus.js";
 import { buildWinnerHandoff } from "../utils/winnerHandoff.js";
+import { closeEndedAuctions } from "../utils/auctionClosing.js";
 
 const allowedKycDocumentFormats = ["image/png", "image/jpeg", "image/webp"];
 
@@ -447,6 +448,11 @@ const removeFromWatchlist = asyncErrorHandler(async (req, res, next) => {
 
 const getWonAuctions = asyncErrorHandler(async (req, res, next) => {
     const now = new Date();
+    await closeEndedAuctions({
+        now,
+        reason: "won-auctions-read",
+        limit: 10,
+    });
     const items = await Auction.find({
         highestBidder: req.user._id,
         status: { $ne: "Draft" },

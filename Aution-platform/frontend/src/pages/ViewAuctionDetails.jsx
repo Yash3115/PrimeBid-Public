@@ -30,6 +30,8 @@ const ViewAuctionDetails = () => {
     serverTime,
     serverTimeReceivedAt
   );
+  const closureStatus = auctionDetail.closureStatus || "Open";
+  const fulfillmentSummary = auctionDetail.fulfillmentSummary;
   const descriptionItems = useMemo(
     () =>
       auctionDetail.description
@@ -90,9 +92,35 @@ const ViewAuctionDetails = () => {
                     <Info label="Category" value={auctionDetail.category || "Not set"} />
                     <Info label="Minimum Bid" value={formatCurrency(auctionDetail.startingBid)} />
                     <Info label="Current Bid" value={formatCurrency(auctionDetail.currentBid || auctionDetail.startingBid)} />
+                    <Info label="Close State" value={status === "Ended" ? closureStatus : status} />
+                    <Info label="Handoff" value={fulfillmentSummary?.status || "Not started"} />
                     <Info label="Starts" value={formatDateTime(auctionDetail.startTime)} />
                     <Info label="Ends" value={formatDateTime(auctionDetail.endTime)} />
                   </div>
+                  {status === "Ended" && (
+                    <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+                      <p className="font-semibold text-slate-950">
+                        {closureStatus === "Processing"
+                          ? "Winner and escrow are being finalized"
+                          : closureStatus === "NoWinner"
+                            ? "Closed without a winner"
+                            : "Post-auction handoff"}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        {fulfillmentSummary?.hasDeliveryAddress
+                          ? "The winner has added delivery details. Continue dispatch from the seller dashboard."
+                          : fulfillmentSummary
+                            ? "PrimeBid notified the winner to add delivery details before dispatch."
+                            : "PrimeBid is preparing the winner handoff and settlement record."}
+                      </p>
+                      <Link
+                        to="/seller-dashboard#fulfillment"
+                        className="mt-3 inline-flex min-h-10 items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-700"
+                      >
+                        Open fulfillment queue
+                      </Link>
+                    </div>
+                  )}
                 </div>
               </div>
 
