@@ -10,7 +10,9 @@ import {
   PointElement,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { MONTH_LABELS, getAdminChartOptions } from "@/lib/adminCharts";
 import { useSelector } from "react-redux";
+import ReportChartFrame from "./ReportChartFrame";
 
 ChartJS.register(
   CategoryScale,
@@ -28,57 +30,39 @@ const BiddersAuctioneersGraph = () => {
     (state) => state.superAdmin
   );
   const data = {
-    labels: [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ],
+    labels: MONTH_LABELS,
     datasets: [
       {
         label: "Number of Bidders",
         data: totalBidders,
-        borderColor: "#D6482B",
+        borderColor: "#4f46e5",
+        backgroundColor: "#4f46e5",
+        pointRadius: 3,
+        tension: 0.35,
         fill: false,
       },
       {
         label: "Number of Auctioneers",
         data: totalAuctioneers,
-        borderColor: "#fdba88",
+        borderColor: "#0f766e",
+        backgroundColor: "#0f766e",
+        pointRadius: 3,
+        tension: 0.35,
         fill: false,
       },
     ],
   };
 
-  const options = {
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 50,
-        ticks: {
-          callback: function (value) {
-            return value.toLocaleString();
-          },
-        },
-      },
-    },
-    plugins: {
-      title: {
-        display: true,
-        text: "Number of Bidders And Auctioneers Registered",
-      },
-    },
-  };
+  const options = getAdminChartOptions({
+    title: "Number of Bidders And Auctioneers Registered",
+    suggestedMax: 50,
+  });
 
-  return <Line data={data} options={options} />;
+  return (
+    <ReportChartFrame>
+      <Line data={data} options={options} />
+    </ReportChartFrame>
+  );
 };
 
 export default BiddersAuctioneersGraph;

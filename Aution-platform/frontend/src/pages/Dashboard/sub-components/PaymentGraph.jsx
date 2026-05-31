@@ -10,7 +10,9 @@ import {
   PointElement,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
+import { MONTH_LABELS, getAdminChartOptions } from "@/lib/adminCharts";
 import { useSelector } from "react-redux";
+import ReportChartFrame from "./ReportChartFrame";
 
 ChartJS.register(
   CategoryScale,
@@ -27,50 +29,28 @@ const PaymentGraph = () => {
   const { monthlyRevenue } = useSelector((state) => state.superAdmin);
 
   const data = {
-    labels: [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ],
+    labels: MONTH_LABELS,
     datasets: [
       {
         label: "Total Payment Received",
         data: monthlyRevenue,
-        backgroundColor: "#D6482B",
+        backgroundColor: "#4f46e5",
+        borderRadius: 5,
+        maxBarThickness: 38,
       },
     ],
   };
 
-  const options = {
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 5000,
-        ticks: {
-          callback: function (value) {
-            return value.toLocaleString();
-          },
-        },
-      },
-    },
-    plugins: {
-      title: {
-        display: true,
-        text: "Monthly Total Payments Received",
-      },
-    },
-  };
+  const options = getAdminChartOptions({
+    title: "Monthly Total Payments Received",
+    suggestedMax: 5000,
+  });
 
-  return <Bar data={data} options={options} />;
+  return (
+    <ReportChartFrame>
+      <Bar data={data} options={options} />
+    </ReportChartFrame>
+  );
 };
 
 export default PaymentGraph;
