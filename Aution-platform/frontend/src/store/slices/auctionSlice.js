@@ -12,6 +12,7 @@ const auctionSlice = createSlice({
     myAutoBid: { active: false, maxAmount: null },
     myAuctions: [],
     allAuctions: [],
+    auctionListError: null,
     serverTime: null,
     serverTimeReceivedAt: null,
     sellerDashboard: null,
@@ -35,15 +36,19 @@ const auctionSlice = createSlice({
     },
     getAllAuctionItemRequest(state) {
       state.loading = true;
+      state.auctionListError = null;
     },
     getAllAuctionItemSuccess(state, action) {
       state.loading = false;
       state.allAuctions = action.payload.items;
       state.serverTime = action.payload.serverTime;
       state.serverTimeReceivedAt = action.payload.receivedAt;
+      state.auctionListError = null;
     },
-    getAllAuctionItemFailed(state) {
+    getAllAuctionItemFailed(state, action) {
       state.loading = false;
+      state.auctionListError =
+        action.payload || "Unable to load auctions. Please try again.";
     },
     getAuctionDetailRequest(state, action) {
       if (!action.payload?.silent) {
@@ -194,7 +199,7 @@ export const getAllAuctionItems = () => async (dispatch) => {
     );
     dispatch(auctionSlice.actions.resetSlice());
   } catch (error) {
-    dispatch(auctionSlice.actions.getAllAuctionItemFailed());
+    dispatch(auctionSlice.actions.getAllAuctionItemFailed(getErrorMessage(error)));
     console.error(error);
     dispatch(auctionSlice.actions.resetSlice());
   }

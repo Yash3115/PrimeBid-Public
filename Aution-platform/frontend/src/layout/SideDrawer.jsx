@@ -5,7 +5,7 @@ import { formatCurrency } from "@/lib/format";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { RiAuctionFill } from "react-icons/ri";
 import { MdLeaderboard } from "react-icons/md";
-import { ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Gavel, ShieldCheck, X } from "lucide-react";
 import {
   BiBarChartSquare,
   BiBell,
@@ -24,10 +24,10 @@ import {
 } from "react-icons/bi";
 
 const navLinkBase =
-  "flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-base font-semibold transition sm:text-lg";
+  "flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition";
 
 const roleLinkBase =
-  "inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition sm:text-base";
+  "inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition";
 
 const SideDrawer = () => {
   const [show, setShow] = useState(false);
@@ -68,13 +68,34 @@ const SideDrawer = () => {
     setShow(false);
   }, [location.hash, location.pathname]);
 
+  useEffect(() => {
+    if (!show) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setShow(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [show]);
+
   return (
     <>
       <button
         type="button"
         onClick={() => setShow((value) => !value)}
         aria-label="Toggle navigation"
-        className="fixed right-4 top-4 z-50 rounded-md bg-indigo-600 p-2 text-2xl text-white shadow-lg transition hover:bg-indigo-700 sm:right-5 sm:top-5 sm:text-3xl 2xl:hidden"
+        aria-controls="primebid-navigation"
+        aria-expanded={show}
+        className="fixed left-4 top-4 z-50 inline-flex h-11 w-11 items-center justify-center rounded-md bg-slate-950 text-xl text-white shadow-lg transition hover:bg-indigo-700 sm:left-5 sm:top-5 xl:hidden"
       >
         <GiHamburgerMenu />
       </button>
@@ -84,31 +105,50 @@ const SideDrawer = () => {
           type="button"
           aria-label="Close navigation"
           onClick={() => setShow(false)}
-          className="fixed inset-0 z-30 bg-slate-950/40 2xl:hidden"
+          className="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-sm xl:hidden"
         />
       )}
 
       <aside
-        className={`fixed top-0 z-40 flex h-dvh w-[min(86vw,320px)] flex-col justify-between overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl transition-all duration-200 2xl:left-0 2xl:w-[300px] 2xl:shadow-none ${
-          show ? "left-0" : "left-[-100%]"
+        id="primebid-navigation"
+        className={`fixed left-0 top-0 z-40 flex h-dvh w-[min(88vw,320px)] flex-col overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/15 transition-transform duration-200 xl:w-[280px] xl:translate-x-0 xl:shadow-none ${
+          show ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div>
-          <Link to="/">
-            <h4 className="mb-4 text-2xl font-semibold">
-              Prime<span className="text-indigo-600">Bid</span>
-            </h4>
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-4">
+          <Link to="/" className="flex min-w-0 items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-slate-950 text-white">
+              <Gavel className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xl font-bold leading-tight text-slate-950">
+                Prime<span className="text-indigo-600">Bid</span>
+              </span>
+              <span className="block truncate text-xs font-semibold text-slate-500">
+                Wallet-backed auctions
+              </span>
+            </span>
           </Link>
+          <button
+            type="button"
+            onClick={() => setShow(false)}
+            aria-label="Close navigation"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-950 xl:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-          <nav className="flex flex-col gap-1.5">
-            <p className="px-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
+        <nav aria-label="Primary navigation" className="mt-5 flex flex-1 flex-col gap-5">
+          <div className="grid gap-1.5">
+            <p className="px-3 text-xs font-bold uppercase text-slate-400 tracking-[0.12em]">
               Marketplace
             </p>
+            <Link to="/" className={getNavClass("/")}>
+              <BiHomeAlt /> Home
+            </Link>
             <Link to="/auctions" className={getNavClass("/auctions")}>
               <RiAuctionFill /> Auctions
-            </Link>
-            <Link to="/leaderboard" className={getNavClass("/leaderboard")}>
-              <MdLeaderboard /> Leaderboard
             </Link>
             <Link to="/watchlist" className={getNavClass("/watchlist")}>
               <BiHeart /> Watchlist
@@ -118,6 +158,9 @@ const SideDrawer = () => {
               className={getNavClass("/recently-viewed")}
             >
               <BiHistory /> Recently Viewed
+            </Link>
+            <Link to="/leaderboard" className={getNavClass("/leaderboard")}>
+              <MdLeaderboard /> Leaderboard
             </Link>
             {isAuthenticated && (
               <Link to="/notifications" className={getNavClass("/notifications")}>
@@ -129,88 +172,76 @@ const SideDrawer = () => {
                 )}
               </Link>
             )}
-            <p className="mt-3 px-3 text-xs font-bold uppercase tracking-[0.14em] text-slate-400">
-              Company
-            </p>
-            <Link to="/about" className={getNavClass("/about")}>
-              <BiInfoCircle /> About
-            </Link>
-            <Link to="/contact" className={getNavClass("/contact")}>
-              <BiEnvelope /> Contact
-            </Link>
-            <Link to="/" className={getNavClass("/")}>
-              <BiHomeAlt /> Home
-            </Link>
-          </nav>
-        </div>
+          </div>
 
-        <div className="mt-6 flex flex-col gap-3 pb-2">
           {isAuthenticated ? (
-            <div className="flex flex-col gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <BiUser className="shrink-0 text-2xl" />
-                <span className="truncate text-lg font-semibold text-indigo-600">
-                  {user?.userName}
-                </span>
+            <>
+              <div className="grid gap-1.5">
+                <p className="px-3 text-xs font-bold uppercase text-slate-400 tracking-[0.12em]">
+                  {user?.role === "Super Admin" ? "Operations" : "Workspace"}
+                </p>
+
+                {user?.role === "Super Admin" && (
+                  <Link to="/dashboard" className={getRoleClass("/dashboard")}>
+                    <BiBarChartSquare className="text-lg" />
+                    Dashboard
+                  </Link>
+                )}
+
+                {user?.role === "Auctioneer" && (
+                  <>
+                    <Link
+                      to="/dashboard"
+                      className={getRoleClass("/dashboard", ["/seller-dashboard"])}
+                    >
+                      <BiBarChartSquare className="text-lg" />
+                      Dashboard
+                    </Link>
+                    <Link
+                      to="/create-auction"
+                      className={getRoleClass("/create-auction")}
+                    >
+                      <RiAuctionFill className="text-lg" />
+                      Create Auction
+                    </Link>
+                    <Link
+                      to="/view-my-auctions"
+                      className={getRoleClass("/view-my-auctions")}
+                    >
+                      <BiCog className="text-lg" />
+                      My Auctions
+                    </Link>
+                    <Link
+                      to="/kyc-verification"
+                      className={getRoleClass("/kyc-verification")}
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      KYC
+                    </Link>
+                  </>
+                )}
+
+                {user?.role === "Bidder" && (
+                  <>
+                    <Link
+                      to="/dashboard"
+                      className={getRoleClass("/dashboard", ["/bidder-dashboard"])}
+                    >
+                      <BiBarChartSquare className="text-lg" />
+                      Dashboard
+                    </Link>
+                    <Link to="/won-auctions" className={getRoleClass("/won-auctions")}>
+                      <BiTrophy className="text-lg" />
+                      Won Auctions
+                    </Link>
+                  </>
+                )}
               </div>
-
-              {user?.role === "Super Admin" && (
-                <Link to="/dashboard" className={getRoleClass("/dashboard")}>
-                  Dashboard
-                </Link>
-              )}
-
-              {user?.role === "Auctioneer" && (
-                <>
-                  <Link
-                    to="/dashboard"
-                    className={getRoleClass("/dashboard", ["/seller-dashboard"])}
-                  >
-                    <BiBarChartSquare className="mr-2 inline" />
-                    Dashboard
-                  </Link>
-                  <Link
-                    to="/kyc-verification"
-                    className={getRoleClass("/kyc-verification")}
-                  >
-                    <BiCog className="mr-2 inline" />
-                    KYC Verification
-                  </Link>
-                  <Link
-                    to="/create-auction"
-                    className={getRoleClass("/create-auction")}
-                  >
-                    Create Auction
-                  </Link>
-                  <Link
-                    to="/view-my-auctions"
-                    className={getRoleClass("/view-my-auctions")}
-                  >
-                    My Auctions
-                  </Link>
-                </>
-              )}
-
-              {user?.role === "Bidder" && (
-                <>
-                  <Link
-                    to="/dashboard"
-                    className={getRoleClass("/dashboard", ["/bidder-dashboard"])}
-                  >
-                    <BiBarChartSquare className="mr-2 inline" />
-                    Dashboard
-                  </Link>
-                  <Link to="/won-auctions" className={getRoleClass("/won-auctions")}>
-                    <BiTrophy className="mr-2 inline" />
-                    Won Auctions
-                  </Link>
-                </>
-              )}
 
               {showWalletCard && (
                 <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-bold uppercase tracking-[0.12em] text-indigo-700">
+                    <p className="text-xs font-bold uppercase text-indigo-700 tracking-[0.12em]">
                       Wallet
                     </p>
                     <BiWallet className="text-xl text-indigo-700" />
@@ -219,7 +250,7 @@ const SideDrawer = () => {
                     {formatCurrency(availableBalance)}
                   </p>
                   <p className="mt-1 text-xs font-semibold text-slate-600">
-                    {formatCurrency(lockedBalance)} locked
+                    {formatCurrency(lockedBalance)} locked in bids or payouts
                   </p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     {canDeposit && (
@@ -246,27 +277,62 @@ const SideDrawer = () => {
                 </div>
               )}
 
-              <hr className="border-t-indigo-600" />
-              <Link to="/wallet" className={getNavClass("/wallet")}>
-                <BiWallet /> Wallet
-              </Link>
-              <Link to="/me" className={getNavClass("/me")}>
-                <BiCog /> Profile
-              </Link>
-              <Link to="/logout" className={getNavClass("/logout")}>
-                <BiLogOut /> Logout
-              </Link>
-            </div>
+              <div className="grid gap-1.5">
+                <p className="px-3 text-xs font-bold uppercase text-slate-400 tracking-[0.12em]">
+                  Account
+                </p>
+                <div className="mb-1 flex min-w-0 items-center gap-2 rounded-md bg-slate-50 px-3 py-2">
+                  <BiUser className="shrink-0 text-xl text-indigo-600" />
+                  <span className="truncate text-sm font-semibold text-slate-950">
+                  {user?.userName}
+                </span>
+                </div>
+                <Link to="/wallet" className={getNavClass("/wallet")}>
+                  <BiWallet /> Wallet
+                </Link>
+                <Link to="/me" className={getNavClass("/me")}>
+                  <BiCog /> Profile
+                </Link>
+                <Link to="/logout" className={getNavClass("/logout")}>
+                  <BiLogOut /> Logout
+                </Link>
+              </div>
+            </>
           ) : (
-            <>
+            <div className="grid gap-1.5">
+              <p className="px-3 text-xs font-bold uppercase text-slate-400 tracking-[0.12em]">
+                Account
+              </p>
               <Link to="/login" className={getNavClass("/login")}>
                 <BiLogIn /> Login
               </Link>
               <Link to="/sign-up" className={getNavClass("/sign-up")}>
                 <BiUserPlus /> Sign Up
               </Link>
-            </>
+            </div>
           )}
+
+          <div className="grid gap-1.5">
+            <p className="px-3 text-xs font-bold uppercase text-slate-400 tracking-[0.12em]">
+              Support
+            </p>
+            <Link to="/about" className={getNavClass("/about")}>
+              <BiInfoCircle /> About
+            </Link>
+            <Link to="/contact" className={getNavClass("/contact")}>
+              <BiEnvelope /> Contact
+            </Link>
+          </div>
+        </nav>
+
+        <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase text-slate-500 tracking-[0.12em]">
+            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            Trust Layer
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            KYC sellers, wallet-backed bids, and visible settlement history keep every auction accountable.
+          </p>
         </div>
       </aside>
     </>

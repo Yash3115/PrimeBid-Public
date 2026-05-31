@@ -56,6 +56,7 @@ const Watchlist = () => {
         </div>
 
         <label className="mb-6 flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100">
+          <span className="sr-only">Search saved auctions</span>
           <Search className="h-5 w-5 text-slate-400" />
           <input
             type="search"

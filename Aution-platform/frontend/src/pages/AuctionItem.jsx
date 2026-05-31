@@ -18,10 +18,23 @@ import {
 import { manageAutoBid, placeBid } from "@/store/slices/bidSlice";
 import { addToWatchlist, removeFromWatchlist } from "@/store/slices/userSlice";
 import { fetchWallet } from "@/store/slices/walletSlice";
-import { Ban, Gavel, Heart, Home, IndianRupee, List, Sparkles, Timer, TrendingUp, Wallet as WalletIcon } from "lucide-react";
+import {
+  BadgeCheck,
+  Ban,
+  Gavel,
+  Heart,
+  Home,
+  IndianRupee,
+  List,
+  ShieldCheck,
+  Sparkles,
+  Timer,
+  TrendingUp,
+  Wallet as WalletIcon,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 /* eslint-disable react/prop-types */
 const getRank = (index) => {
@@ -53,7 +66,7 @@ const AuctionItem = () => {
   const [amount, setAmount] = useState("");
   const [maxAutoBid, setMaxAutoBid] = useState("");
   const [autoBidLimit, setAutoBidLimit] = useState("");
-  const navigateTo = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
 
   const bidders = Array.isArray(auctionBidders) ? auctionBidders : [];
@@ -97,6 +110,7 @@ const AuctionItem = () => {
   });
   const canSubmitBid =
     isLive &&
+    isBidder &&
     !isOwnAuction &&
     Number.isFinite(bidAmount) &&
     bidAmount >= nextBid &&
@@ -118,6 +132,8 @@ const AuctionItem = () => {
     ? "Bidding is only available while the auction is live."
     : isOwnAuction
       ? "You cannot bid on your own auction."
+      : !isBidder
+        ? "Only bidder accounts can place bids. Use a bidder account to participate."
       : !Number.isFinite(bidAmount)
         ? `Enter at least ${formatCurrency(nextBid)} to bid.`
         : bidAmount < nextBid
@@ -138,6 +154,10 @@ const AuctionItem = () => {
 
   const handleBid = async (e) => {
     e.preventDefault();
+    const confirmed = window.confirm(
+      `Place a bid of ${formatCurrency(Number(amount || 0))}? Bids are binding while the auction is live.`
+    );
+    if (!confirmed) return;
     const result = await dispatch(placeBid(id, { amount, maxAutoBid }));
     if (result?.success) {
       setAmount("");
@@ -180,30 +200,30 @@ const AuctionItem = () => {
   });
 
   const handleSummary = () => {
+    if (!isAuthenticated) return;
     dispatch(summarizeAuction(getAiAuctionPayload()));
   };
 
   const handleBidAdvice = () => {
+    if (!isAuthenticated) return;
     dispatch(getBidAdvice(getAiAuctionPayload(), amount || nextBid));
   };
 
   useEffect(() => {
-    if (!authChecked) return;
-    if (!isAuthenticated) {
-      navigateTo("/");
-      return;
-    }
     if (id) {
       dispatch(getAuctionDetail(id));
-      if (user.role === "Bidder") {
-        dispatch(fetchWallet());
-      }
       const interval = setInterval(() => {
         dispatch(getAuctionDetail(id, { silent: true }));
       }, 12000);
       return () => clearInterval(interval);
     }
-  }, [authChecked, dispatch, id, isAuthenticated, navigateTo, user.role]);
+  }, [dispatch, id]);
+
+  useEffect(() => {
+    if (authChecked && isAuthenticated && user.role === "Bidder") {
+      dispatch(fetchWallet());
+    }
+  }, [authChecked, dispatch, isAuthenticated, user.role]);
 
   useEffect(() => {
     if (!auctionDetail._id) return;
@@ -259,7 +279,7 @@ const AuctionItem = () => {
           <Spinner />
         ) : (
           <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
-            <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="order-1 rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(220px,0.8fr)_minmax(0,1fr)] lg:p-6">
                 <div className="overflow-hidden rounded-lg bg-slate-100">
                   <img
@@ -303,48 +323,17 @@ const AuctionItem = () => {
                     <Info label="Starts" value={formatDateTime(auctionDetail.startTime)} />
                     <Info label="Ends" value={formatDateTime(auctionDetail.endTime)} />
                   </div>
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                    <TrustNote icon={ShieldCheck} text="Seller account reviewed" />
+                    <TrustNote icon={WalletIcon} text="Wallet funds are held visibly" />
+                    <TrustNote icon={BadgeCheck} text="Winning bid settles automatically" />
+                    <TrustNote icon={Timer} text={`${auctionDetail.antiSnipingExtensionMinutes || 0} min anti-sniping extension`} />
+                  </div>
                 </div>
-              </div>
-
-              <div className="border-t border-slate-200 p-5 md:p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-950">
-                    <List className="h-5 w-5 text-indigo-600" />
-                    Description
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={handleSummary}
-                    disabled={aiActionLoading || !auctionDetail.title}
-                    className="inline-flex w-fit items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    {aiActionLoading ? "Thinking..." : "AI Summary"}
-                  </button>
-                </div>
-                {descriptionItems.length > 0 ? (
-                  <ul className="mt-4 grid gap-3 text-slate-600">
-                    {descriptionItems.map((element) => (
-                      <li key={element} className="rounded-md bg-slate-50 p-3 leading-7">
-                        {element}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-4 text-slate-500">No description provided.</p>
-                )}
-                {auctionSummary && (
-                  <AiPanel title={auctionSummary.headline || "AI Auction Summary"}>
-                    <AiList label="Key Points" items={auctionSummary.keyPoints} />
-                    <AiList label="Missing Info" items={auctionSummary.missingInfo} />
-                    <AiList label="Risk Notes" items={auctionSummary.riskNotes} />
-                    <AiList label="Buyer Questions" items={auctionSummary.buyerQuestions} />
-                  </AiPanel>
-                )}
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="order-2 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
                 <h2 className="text-xl font-semibold text-slate-950">Bids</h2>
                 <span className="text-sm font-semibold text-slate-500">
@@ -402,6 +391,30 @@ const AuctionItem = () => {
                       <Gavel className="h-5 w-5 text-indigo-300" />
                       You cannot bid on your own auction.
                     </p>
+                  ) : !isAuthenticated ? (
+                    <div className="grid gap-4 rounded-md border border-white/10 bg-white/5 p-4 text-white">
+                      <div>
+                        <p className="text-lg font-semibold">Login to place a bid</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-300">
+                          You can inspect this auction publicly. Sign in with a bidder account to save it, get AI bid advice, and compete live.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Link
+                          to="/login"
+                          state={{ from: `${location.pathname}${location.search}` }}
+                          className="inline-flex min-h-11 items-center justify-center rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-500"
+                        >
+                          Login to Bid
+                        </Link>
+                        <Link
+                          to="/sign-up"
+                          className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/15 px-4 py-2 font-semibold text-white transition hover:bg-white/10"
+                        >
+                          Create Bidder Account
+                        </Link>
+                      </div>
+                    </div>
                   ) : (
                     <div className="grid gap-4">
                       <div className="grid gap-3 rounded-md bg-white/5 p-4 sm:grid-cols-2">
@@ -485,6 +498,7 @@ const AuctionItem = () => {
                             <IndianRupee className="h-5 w-5 text-slate-400" />
                             <input
                               type="number"
+                              inputMode="numeric"
                               min={nextBid}
                               className="min-w-0 flex-1 bg-transparent py-1 text-slate-950 outline-none"
                               value={amount}
@@ -502,6 +516,7 @@ const AuctionItem = () => {
                             <IndianRupee className="h-5 w-5 text-slate-400" />
                             <input
                               type="number"
+                              inputMode="numeric"
                               min={amount || nextBid}
                               className="min-w-0 flex-1 bg-transparent py-1 text-slate-950 outline-none"
                               value={maxAutoBid}
@@ -544,6 +559,7 @@ const AuctionItem = () => {
                               <IndianRupee className="h-5 w-5 text-slate-400" />
                               <input
                                 type="number"
+                                inputMode="numeric"
                                 min={ownBidAmount + 1}
                                 className="min-w-0 flex-1 bg-transparent py-1 text-slate-950 outline-none"
                                 value={autoBidLimit}
@@ -600,7 +616,7 @@ const AuctionItem = () => {
                             : `Place Bid${Number.isFinite(bidAmount) ? ` (${formatCurrency(bidAmount)})` : ""}`}
                         </button>
                         {bidValidationMessage && (
-                          <p className="text-sm font-medium text-indigo-100">
+                          <p className="text-sm font-medium text-indigo-100" aria-live="polite">
                             {bidValidationMessage}
                             {isBidder && submitWalletRequirement.shortfall > 0 && (
                               <>
@@ -639,6 +655,47 @@ const AuctionItem = () => {
                 )}
               </form>
             </div>
+
+            <div className="order-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6 2xl:col-span-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-950">
+                  <List className="h-5 w-5 text-indigo-600" />
+                  Description
+                </h2>
+                <button
+                  type="button"
+                  onClick={handleSummary}
+                  disabled={aiActionLoading || !auctionDetail.title || !isAuthenticated}
+                  className="inline-flex w-fit items-center gap-2 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {!isAuthenticated
+                    ? "Login for AI Summary"
+                    : aiActionLoading
+                      ? "Thinking..."
+                      : "AI Summary"}
+                </button>
+              </div>
+              {descriptionItems.length > 0 ? (
+                <ul className="mt-4 grid gap-3 text-slate-600 md:grid-cols-2">
+                  {descriptionItems.map((element) => (
+                    <li key={element} className="rounded-md bg-slate-50 p-3 leading-7">
+                      {element}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-4 text-slate-500">No description provided.</p>
+              )}
+              {auctionSummary && (
+                <AiPanel title={auctionSummary.headline || "AI Auction Summary"}>
+                  <AiList label="Key Points" items={auctionSummary.keyPoints} />
+                  <AiList label="Missing Info" items={auctionSummary.missingInfo} />
+                  <AiList label="Risk Notes" items={auctionSummary.riskNotes} />
+                  <AiList label="Buyer Questions" items={auctionSummary.buyerQuestions} />
+                </AiPanel>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -650,6 +707,13 @@ const Info = ({ label, value }) => (
   <div className="rounded-md bg-slate-50 p-3">
     <p className="stat-label">{label}</p>
     <p className="stat-value">{value}</p>
+  </div>
+);
+
+const TrustNote = ({ icon: Icon, text }) => (
+  <div className="flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+    <Icon className="h-4 w-4 shrink-0 text-indigo-600" />
+    <span>{text}</span>
   </div>
 );
 

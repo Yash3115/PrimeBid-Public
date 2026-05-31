@@ -3,7 +3,7 @@ import cors from "cors";
 import cookieParser from 'cookie-parser';
 import fileUpload from 'express-fileupload';
 import os from "os";
-import { connection } from './db/connection.js';
+import { connection, getConnectionStatus } from './db/connection.js';
 import dotenv from 'dotenv';
 import userroute from "./routes/userroutes.js";
 import errorMiddleware from './middlewares/error.js';
@@ -58,30 +58,35 @@ app.get("/health",(req,res)=>{
     });
 })
 
-app.use(async (req, res, next) => {
+app.get("/ready",(req,res)=>{
+    const database = getConnectionStatus();
+    res.status(database.connected ? 200 : 503).json({
+        success: database.connected,
+        status: database.connected ? "ready" : "not_ready",
+        database: database.connected ? "connected" : "disconnected",
+        error: database.connected ? null : "Database temporarily unavailable",
+    });
+})
+
+const requireDatabaseConnection = async (req, res, next) => {
     try {
         await connection();
         next();
     } catch (error) {
-        next(error);
+        console.error("Database unavailable for request:", error.message);
+        const err = new Error("Database temporarily unavailable. Please try again later.");
+        err.statusCode = 503;
+        next(err);
     }
-});
+};
 
-app.get("/ready",(req,res)=>{
-    res.status(200).json({
-        success: true,
-        status: "ready",
-        database: "connected",
-    });
-})
-
-app.use("/api/v1/user",userroute)
-app.use("/api/v1/auctionitem",auctionItemRoute)
-app.use("/api/v1/bid",bidRoute);
-app.use("/api/v1/superadmin",superAdminRoutes);
-app.use("/api/v1/ai",aiRoutes);
-app.use("/api/v1/cron",cronRoutes);
-app.use("/api/v1/wallet",walletRoutes);
+app.use("/api/v1/user", requireDatabaseConnection, userroute)
+app.use("/api/v1/auctionitem", requireDatabaseConnection, auctionItemRoute)
+app.use("/api/v1/bid", requireDatabaseConnection, bidRoute);
+app.use("/api/v1/superadmin", requireDatabaseConnection, superAdminRoutes);
+app.use("/api/v1/ai", requireDatabaseConnection, aiRoutes);
+app.use("/api/v1/cron", requireDatabaseConnection, cronRoutes);
+app.use("/api/v1/wallet", requireDatabaseConnection, walletRoutes);
 
 app.use((req, res, next) => {
     const err = new Error(`Route not found: ${req.originalUrl}`);
@@ -94,15 +99,18 @@ app.use(errorMiddleware);
 const shouldStartLocalServer = !process.env.VERCEL && process.env.NODE_ENV !== "test";
 
 if (shouldStartLocalServer) {
+  const port = process.env.PORT || 8000;
+  app.listen(port, () => {
+      console.log(`listening on http://localhost:${port}`);
+  });
+
   connection().then(() => {
     endedAuctionCron();
-    const port = process.env.PORT || 8000;
-    app.listen(port, () => {
-        console.log(`listening on http://localhost:${port}`);
-    });
   }).catch((error) => {
-    console.error("Failed to start server:", error);
-    process.exit(1);
+    console.error(
+      "Database connection failed. DB-backed routes will return errors until the database is reachable:",
+      error.message
+    );
   });
 }
 

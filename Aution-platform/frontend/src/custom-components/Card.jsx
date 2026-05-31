@@ -64,7 +64,7 @@ const Card = ({
 
   const formatTimeLeft = ({ days, hours, minutes, seconds }) => {
     const pad = (num) => String(num).padStart(2, "0");
-    return `(${days} Days) ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   };
 
   const latestBid = Number(currentBid || startingBid || 0);
@@ -85,6 +85,7 @@ const Card = ({
           type="button"
           onClick={handleWatchlist}
           disabled={watchlistLoading}
+          aria-pressed={isSaved}
           className={`absolute right-3 top-3 z-10 rounded-md p-2 shadow-sm ring-1 ring-slate-200/70 transition ${
             isSaved
               ? "bg-rose-50 text-rose-600 hover:bg-rose-100"

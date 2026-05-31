@@ -68,6 +68,15 @@ const CardTwo = ({
     return `${days}d ${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
   };
 
+  const handleDelete = () => {
+    const confirmed = window.confirm(
+      `Delete "${title}"? This removes the auction from the marketplace.`
+    );
+    if (confirmed) {
+      dispatch(deleteAuction(id));
+    }
+  };
+
   return (
     <>
       <div className="app-card app-card-hover overflow-hidden">
@@ -143,7 +152,7 @@ const CardTwo = ({
             </Link>
             <button
               className="btn-danger"
-              onClick={() => dispatch(deleteAuction(id))}
+              onClick={handleDelete}
               type="button"
             >
               <Trash2 className="h-4 w-4" />
@@ -200,15 +209,18 @@ const Drawer = ({ setOpenDrawer, openDrawer, id }) => {
   const [endTime, setEndTime] = useState("");
   const { loading } = useSelector((state) => state.auction);
 
+  if (!openDrawer || !id) return null;
+
   const handleRepublishAuction = () => {
     dispatch(republishAuction(id, { startTime, endTime }));
   };
 
   return (
     <section
-      className={`fixed inset-x-0 z-50 flex h-full items-end bg-slate-950/50 transition-all duration-300 ${
-        openDrawer && id ? "bottom-0" : "-bottom-full"
-      }`}
+      className="fixed inset-0 z-50 flex items-end bg-slate-950/50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="republish-auction-title"
     >
       <div className="w-full rounded-t-lg bg-white shadow-2xl">
         <div className="mx-auto w-full max-w-2xl px-5 py-8">
@@ -217,7 +229,7 @@ const Drawer = ({ setOpenDrawer, openDrawer, id }) => {
               <p className="app-kicker">
                 Republish
               </p>
-              <h3 className="mt-2 text-2xl font-semibold text-slate-950">
+              <h3 id="republish-auction-title" className="mt-2 text-2xl font-semibold text-slate-950">
                 Set a new auction window
               </h3>
             </div>
@@ -319,6 +331,8 @@ const EditDrawer = ({ auction, setOpenDrawer, openDrawer }) => {
     setImage("");
   }, [auction]);
 
+  if (!openDrawer || !auction.id) return null;
+
   const buildFormData = () => {
     const formData = new FormData();
     formData.append("title", title);
@@ -351,9 +365,10 @@ const EditDrawer = ({ auction, setOpenDrawer, openDrawer }) => {
 
   return (
     <section
-      className={`fixed inset-x-0 z-50 flex h-full items-end bg-slate-950/50 transition-all duration-300 ${
-        openDrawer && auction.id ? "bottom-0" : "-bottom-full"
-      }`}
+      className="fixed inset-0 z-50 flex items-end bg-slate-950/50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-auction-title"
     >
       <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-lg bg-white shadow-2xl">
         <div className="mx-auto w-full max-w-3xl px-5 py-8">
@@ -362,7 +377,7 @@ const EditDrawer = ({ auction, setOpenDrawer, openDrawer }) => {
               <p className="app-kicker">
                 Edit auction
               </p>
-              <h3 className="mt-2 text-2xl font-semibold text-slate-950">
+              <h3 id="edit-auction-title" className="mt-2 text-2xl font-semibold text-slate-950">
                 Update details before bidding starts
               </h3>
             </div>

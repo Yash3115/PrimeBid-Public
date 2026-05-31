@@ -10,8 +10,13 @@ const AuctionItemDelete = () => {
   );
   const dispatch = useDispatch();
 
-  const handleAuctionDelete = (id) => {
-    dispatch(deleteAuctionItem(id));
+  const handleAuctionDelete = (auction) => {
+    const confirmed = window.confirm(
+      `Delete "${auction.title}" from PrimeBid? This moderation action cannot be undone.`
+    );
+    if (confirmed) {
+      dispatch(deleteAuctionItem(auction._id));
+    }
   };
 
   return (
@@ -72,7 +77,7 @@ const AuctionItemDelete = () => {
                       </Link>
                       <button
                         className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
-                        onClick={() => handleAuctionDelete(element._id)}
+                        onClick={() => handleAuctionDelete(element)}
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete

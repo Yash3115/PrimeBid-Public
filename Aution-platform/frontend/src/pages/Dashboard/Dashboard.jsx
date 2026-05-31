@@ -170,6 +170,23 @@ const Dashboard = () => {
           </div>
         </div>
 
+        <nav
+          className="sticky top-3 z-20 mb-6 overflow-x-auto rounded-lg border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur xl:top-4"
+          aria-label="Admin dashboard sections"
+        >
+          <div className="flex min-w-max gap-2">
+            {sections.map(({ id, title }) => (
+              <a
+                key={id}
+                href={`#${id}`}
+                className="rounded-md px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                {title}
+              </a>
+            ))}
+          </div>
+        </nav>
+
         {!authChecked || loading ? (
           <Spinner />
         ) : (
