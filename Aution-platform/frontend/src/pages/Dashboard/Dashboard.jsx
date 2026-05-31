@@ -2,6 +2,7 @@ import Spinner from "@/custom-components/Spinner";
 import { formatCurrency, formatDateTime, getAuctionStatus } from "@/lib/format";
 import {
   getAdminOverview,
+  getAdminOperations,
   clearAllSuperAdminSliceErrors,
   getAllUsers,
   getKycSubmissions,
@@ -34,6 +35,7 @@ import KycManagement from "./sub-components/KycManagement";
 import WithdrawalManagement from "./sub-components/WithdrawalManagement";
 import DisputeManagement from "./sub-components/DisputeManagement";
 import SellerRiskManagement from "./sub-components/SellerRiskManagement";
+import OperationsCenter from "./sub-components/OperationsCenter";
 
 /* eslint-disable react/prop-types */
 
@@ -64,6 +66,7 @@ const Dashboard = () => {
 
     dispatch(getMonthlyRevenue());
     dispatch(getAdminOverview());
+    dispatch(getAdminOperations());
     dispatch(getAllUsers());
     dispatch(getKycSubmissions("Pending"));
     dispatch(getWithdrawalRequests("Pending"));
@@ -71,6 +74,12 @@ const Dashboard = () => {
   }, [authChecked, dispatch, isAuthenticated, navigateTo, user.role]);
 
   const sections = [
+    {
+      icon: AlertTriangle,
+      title: "Operations Queue",
+      id: "operations-queue",
+      content: <OperationsCenter />,
+    },
     {
       icon: BarChart3,
       title: "Monthly Total Payments Received",

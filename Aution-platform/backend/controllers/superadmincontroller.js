@@ -21,11 +21,17 @@ import {
     sumRowsById,
 } from "../utils/adminDashboard.js";
 import {
+    buildOperationGroup,
+    buildOperationItem,
+    summarizeOperationGroups,
+} from "../utils/adminOperations.js";
+import {
     getOrCreatePlatformAccount,
     getPlatformSnapshot,
 } from "../utils/platformAccount.js";
 import { buildWalletReconciliation } from "../utils/walletReconciliation.js";
 import { SELLER_RISK_LEVEL, buildSellerQualityMap } from "../utils/sellerQuality.js";
+import { FULFILLMENT_STATUS, SETTLEMENT_STATUS } from "../utils/fulfillment.js";
 
 const escapeRegex = (value) =>
     String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -559,6 +565,326 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
     });
 });
 
+const fetchAdminOperations = asyncErrorHandler(async(req,res,next)=>{
+    const now = new Date();
+    const requestedLimit = Number(req.query.limit || 6);
+    const limit = Math.min(
+        Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 6, 1),
+        12
+    );
+    const addressWarningDate = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    const shipmentWarningDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const [
+        pendingKyc,
+        pendingWithdrawals,
+        openDisputes,
+        settlementReviews,
+        stalledFulfillments,
+        auctionCandidates,
+        sellerRows,
+        sellerFulfillments,
+        sellerAuctions,
+    ] = await Promise.all([
+        User.find({ role: "Auctioneer", kycStatus: "Pending" })
+            .select("userName email kycStatus kycSubmittedAt createdAt")
+            .sort({ kycSubmittedAt: 1, createdAt: 1 })
+            .limit(limit)
+            .lean(),
+        WithdrawalRequest.find({ status: "Pending" })
+            .populate("user", "userName email role wallet kycStatus")
+            .sort({ createdAt: 1 })
+            .limit(limit)
+            .lean(),
+        Fulfillment.find({ "dispute.isOpen": true })
+            .populate("auction", "title currentBid image")
+            .populate("bidder", "userName email")
+            .populate("seller", "userName email")
+            .sort({ "dispute.reportedAt": 1, updatedAt: 1 })
+            .limit(limit)
+            .lean(),
+        Fulfillment.find({
+            settlementStatus: {
+                $in: [
+                    SETTLEMENT_STATUS.NEEDS_REVIEW,
+                    SETTLEMENT_STATUS.READY_TO_RELEASE,
+                ],
+            },
+            "dispute.isOpen": { $ne: true },
+        })
+            .populate("auction", "title currentBid image")
+            .populate("bidder", "userName email")
+            .populate("seller", "userName email")
+            .sort({ updatedAt: 1 })
+            .limit(limit)
+            .lean(),
+        Fulfillment.find({
+            $or: [
+                {
+                    status: FULFILLMENT_STATUS.AWAITING_ADDRESS,
+                    createdAt: { $lte: addressWarningDate },
+                },
+                {
+                    status: FULFILLMENT_STATUS.READY_TO_SHIP,
+                    addressSubmittedAt: { $lte: shipmentWarningDate },
+                },
+            ],
+        })
+            .populate("auction", "title currentBid image")
+            .populate("bidder", "userName email")
+            .populate("seller", "userName email")
+            .sort({ updatedAt: 1 })
+            .limit(limit)
+            .lean(),
+        Auction.find({ status: { $ne: "Draft" } })
+            .select("title currentBid startingBid bids status startTime endTime createdBy updatedAt")
+            .populate("createdBy", "userName email")
+            .sort({ endTime: 1 })
+            .limit(250)
+            .lean(),
+        User.find({ role: "Auctioneer" })
+            .select("userName email role accountStatus kycStatus reputation createdAt")
+            .lean(),
+        Fulfillment.find()
+            .select("seller status settlementStatus settlement dispute addressSubmittedAt shipping updatedAt")
+            .lean(),
+        Auction.find()
+            .select("createdBy status startTime endTime")
+            .lean(),
+    ]);
+
+    const sellerQualityMap = buildSellerQualityMap({
+        sellers: sellerRows,
+        fulfillments: sellerFulfillments,
+        auctions: sellerAuctions,
+        now,
+    });
+    const riskySellers = [...sellerQualityMap.values()]
+        .filter((seller) => seller.riskLevel !== SELLER_RISK_LEVEL.LOW)
+        .sort((a, b) => b.riskScore - a.riskScore || b.openDisputes - a.openDisputes)
+        .slice(0, limit);
+    const auctionRisks = auctionCandidates
+        .map((auction) => ({
+            auction,
+            timing: getAuctionTiming(auction, now),
+        }))
+        .filter(({ auction, timing }) => {
+            const hasNoBids = (auction.bids || []).length === 0;
+            return (
+                timing.runtimeStatus === AUCTION_RUNTIME_STATUS.INVALID ||
+                (hasNoBids &&
+                    [
+                        AUCTION_RUNTIME_STATUS.UPCOMING,
+                        AUCTION_RUNTIME_STATUS.LIVE,
+                    ].includes(timing.runtimeStatus))
+            );
+        })
+        .slice(0, limit);
+
+    const groups = [
+        buildOperationGroup({
+            id: "kyc",
+            label: "KYC Review",
+            detail: "Auctioneers waiting for listing approval.",
+            href: "#kyc",
+            priority: "high",
+            emptyLabel: "No pending KYC submissions.",
+            items: pendingKyc.map((user) =>
+                buildOperationItem({
+                    id: user._id,
+                    title: user.userName,
+                    detail: user.email,
+                    status: user.kycStatus,
+                    createdAt: user.kycSubmittedAt || user.createdAt,
+                    href: "#kyc",
+                    actionLabel: "Review KYC",
+                    priority: "high",
+                    now,
+                    sla: { warningHours: 24, criticalHours: 72 },
+                })
+            ),
+        }),
+        buildOperationGroup({
+            id: "withdrawals",
+            label: "Withdrawal Review",
+            detail: "Manual payout requests waiting for approval.",
+            href: "#withdrawals",
+            priority: "critical",
+            emptyLabel: "No pending withdrawals.",
+            items: pendingWithdrawals.map((withdrawal) =>
+                buildOperationItem({
+                    id: withdrawal._id,
+                    title: withdrawal.user?.userName || "Wallet user",
+                    detail: withdrawal.user?.email || "No email",
+                    status: withdrawal.status,
+                    amount: withdrawal.amount,
+                    createdAt: withdrawal.createdAt,
+                    href: "#withdrawals",
+                    actionLabel: "Review payout",
+                    priority: "critical",
+                    now,
+                    sla: { warningHours: 12, criticalHours: 48 },
+                    meta: {
+                        bankName: withdrawal.bankDetailsSnapshot?.bankName || "",
+                        kycStatus: withdrawal.user?.kycStatus || "",
+                    },
+                })
+            ),
+        }),
+        buildOperationGroup({
+            id: "disputes",
+            label: "Delivery Disputes",
+            detail: "Buyer issues that may block escrow release.",
+            href: "#disputes",
+            priority: "critical",
+            emptyLabel: "No open delivery disputes.",
+            items: openDisputes.map((fulfillment) =>
+                buildOperationItem({
+                    id: fulfillment._id,
+                    title: fulfillment.auction?.title || "Auction fulfillment",
+                    detail: `${fulfillment.bidder?.userName || "Buyer"} vs ${fulfillment.seller?.userName || "Seller"}`,
+                    status: fulfillment.dispute?.status || "Open",
+                    amount: fulfillment.settlement?.escrowAmount || fulfillment.winningAmount,
+                    createdAt: fulfillment.dispute?.reportedAt || fulfillment.updatedAt,
+                    href: "#disputes",
+                    actionLabel: "Resolve dispute",
+                    priority: "critical",
+                    now,
+                    sla: { warningHours: 12, criticalHours: 48 },
+                    meta: {
+                        issueType: fulfillment.dispute?.issueType || "",
+                        settlementStatus: fulfillment.settlementStatus,
+                    },
+                })
+            ),
+        }),
+        buildOperationGroup({
+            id: "settlement",
+            label: "Escrow Settlement",
+            detail: "Captured funds waiting for admin or buyer confirmation.",
+            href: "#disputes",
+            priority: "high",
+            emptyLabel: "No settlement reviews pending.",
+            items: settlementReviews.map((fulfillment) =>
+                buildOperationItem({
+                    id: fulfillment._id,
+                    title: fulfillment.auction?.title || "Escrow item",
+                    detail: `${fulfillment.seller?.userName || "Seller"} payout`,
+                    status: fulfillment.settlementStatus,
+                    amount: fulfillment.settlement?.escrowAmount || fulfillment.winningAmount,
+                    createdAt: fulfillment.updatedAt,
+                    href: "#disputes",
+                    actionLabel: "Review escrow",
+                    priority:
+                        fulfillment.settlementStatus === SETTLEMENT_STATUS.NEEDS_REVIEW
+                            ? "critical"
+                            : "high",
+                    now,
+                    sla: { warningHours: 48, criticalHours: 96 },
+                })
+            ),
+        }),
+        buildOperationGroup({
+            id: "fulfillment",
+            label: "Fulfillment Follow-Up",
+            detail: "Orders stuck before shipment or buyer address submission.",
+            href: "#operations",
+            priority: "medium",
+            emptyLabel: "No stalled fulfillment work.",
+            items: stalledFulfillments.map((fulfillment) =>
+                buildOperationItem({
+                    id: fulfillment._id,
+                    title: fulfillment.auction?.title || "Order handoff",
+                    detail:
+                        fulfillment.status === FULFILLMENT_STATUS.AWAITING_ADDRESS
+                            ? `${fulfillment.bidder?.userName || "Buyer"} needs address`
+                            : `${fulfillment.seller?.userName || "Seller"} needs to ship`,
+                    status: fulfillment.status,
+                    amount: fulfillment.winningAmount,
+                    createdAt:
+                        fulfillment.status === FULFILLMENT_STATUS.READY_TO_SHIP
+                            ? fulfillment.addressSubmittedAt || fulfillment.updatedAt
+                            : fulfillment.createdAt,
+                    href: "#operations",
+                    actionLabel: "Follow up",
+                    priority: "medium",
+                    now,
+                    sla: { warningHours: 48, criticalHours: 120 },
+                })
+            ),
+        }),
+        buildOperationGroup({
+            id: "seller-risk",
+            label: "Seller Risk",
+            detail: "Auctioneers with dispute, refund, or service risk signals.",
+            href: "#seller-risk",
+            priority: "critical",
+            emptyLabel: "No elevated seller risk.",
+            items: riskySellers.map((seller) =>
+                buildOperationItem({
+                    id: seller.sellerId,
+                    title: seller.userName,
+                    detail: seller.email,
+                    status: `${seller.riskLevel} risk`,
+                    createdAt: now,
+                    href: "#seller-risk",
+                    actionLabel: "Review seller",
+                    priority:
+                        seller.riskLevel === SELLER_RISK_LEVEL.HIGH
+                            ? "critical"
+                            : "high",
+                    now,
+                    meta: {
+                        riskScore: seller.riskScore,
+                        openDisputes: seller.openDisputes,
+                        reasons: seller.reasons,
+                    },
+                })
+            ),
+        }),
+        buildOperationGroup({
+            id: "auction-risk",
+            label: "Auction Health",
+            detail: "Listings with invalid dates or no bid traction.",
+            href: "#auction-moderation",
+            priority: "low",
+            emptyLabel: "No auction health issues.",
+            items: auctionRisks.map(({ auction, timing }) =>
+                buildOperationItem({
+                    id: auction._id,
+                    title: auction.title,
+                    detail: auction.createdBy?.userName || auction.createdBy?.email || "Auctioneer",
+                    status:
+                        timing.runtimeStatus === AUCTION_RUNTIME_STATUS.INVALID
+                            ? "Invalid schedule"
+                            : "No bids yet",
+                    amount: auction.currentBid || auction.startingBid,
+                    createdAt: auction.updatedAt || auction.startTime,
+                    href: "#auction-moderation",
+                    actionLabel: "Review auction",
+                    priority:
+                        timing.runtimeStatus === AUCTION_RUNTIME_STATUS.INVALID
+                            ? "high"
+                            : "low",
+                    now,
+                    meta: {
+                        runtimeStatus: timing.runtimeStatus,
+                        endTime: auction.endTime,
+                    },
+                })
+            ),
+        }),
+    ];
+
+    return res.status(200).json({
+        success: true,
+        operations: {
+            generatedAt: now.toISOString(),
+            summary: summarizeOperationGroups(groups),
+            groups,
+        },
+    });
+});
+
 const monthlyRevenue = asyncErrorHandler(async(req,res,next)=>{
     const payments = await Commission.aggregate([
         {
@@ -605,6 +931,7 @@ const monthlyRevenue = asyncErrorHandler(async(req,res,next)=>{
 export {
     removefromAuction,
     fetchAdminOverview,
+    fetchAdminOperations,
     fetchAllusers,
     fetchUsersList,
     updateUserStatus,

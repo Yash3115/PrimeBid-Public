@@ -8,6 +8,7 @@ const superAdminSlice = createSlice({
   initialState: {
     loading: false,
     overview: null,
+    operations: null,
     monthlyRevenue: [],
     platformAccount: null,
     platformTransactions: [],
@@ -79,6 +80,9 @@ const superAdminSlice = createSlice({
     adminOverviewSuccess(state, action) {
       state.overview = action.payload;
     },
+    adminOperationsSuccess(state, action) {
+      state.operations = action.payload;
+    },
   },
 });
 
@@ -86,6 +90,21 @@ export const getAdminOverview = () => async (dispatch) => {
   try {
     const response = await api.get("/superadmin/overview");
     dispatch(superAdminSlice.actions.adminOverviewSuccess(response.data.overview));
+    return response.data;
+  } catch (error) {
+    console.error(getErrorMessage(error));
+    return { success: false };
+  }
+};
+
+export const getAdminOperations = (limit = 6) => async (dispatch) => {
+  try {
+    const response = await api.get("/superadmin/operations", {
+      params: { limit },
+    });
+    dispatch(
+      superAdminSlice.actions.adminOperationsSuccess(response.data.operations)
+    );
     return response.data;
   } catch (error) {
     console.error(getErrorMessage(error));
@@ -159,6 +178,8 @@ export const updateUserStatus = (id, accountStatus) => async (dispatch) => {
     );
     toast.success(response.data.message);
     dispatch(getUsersList());
+    dispatch(getAdminOverview());
+    dispatch(getAdminOperations());
     dispatch(getAuditLogs());
   } catch (error) {
     toastApiError(error);
@@ -177,6 +198,7 @@ export const warnSellerRisk =
       toast.success(response.data.message);
       dispatch(getAuditLogs());
       dispatch(getAdminOverview());
+      dispatch(getAdminOperations());
       return response.data;
     } catch (error) {
       toastApiError(error);
@@ -195,6 +217,7 @@ export const requireSellerKycReview =
       );
       toast.success(response.data.message);
       dispatch(getAdminOverview());
+      dispatch(getAdminOperations());
       dispatch(getUsersList());
       dispatch(getKycSubmissions("Pending"));
       dispatch(getAuditLogs());
@@ -227,6 +250,8 @@ export const updateKycStatus =
       );
       toast.success(response.data.message);
       dispatch(getKycSubmissions(currentFilter));
+      dispatch(getAdminOverview());
+      dispatch(getAdminOperations());
       dispatch(getUsersList());
       dispatch(getAuditLogs());
       return response.data;
@@ -277,6 +302,8 @@ export const reviewWithdrawalRequest =
           response.data.withdrawals
         )
       );
+      dispatch(getAdminOverview());
+      dispatch(getAdminOperations());
       dispatch(getAuditLogs());
       return response.data;
     } catch (error) {
@@ -315,6 +342,7 @@ export const reviewFulfillmentDispute =
       dispatch(getFulfillmentDisputes(currentFilter));
       dispatch(getAuditLogs());
       dispatch(getAdminOverview());
+      dispatch(getAdminOperations());
       return response.data;
     } catch (error) {
       toastApiError(error);

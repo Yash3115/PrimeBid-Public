@@ -3,6 +3,7 @@ import { isAuth, isAuthorised } from "../middlewares/auth.js";
 import {
     removefromAuction,
     fetchAdminOverview,
+    fetchAdminOperations,
     fetchAllusers,
     fetchUsersList,
     updateUserStatus,
@@ -26,6 +27,7 @@ const router = express.Router();
 router.delete("/auctionitem/delete/:id",isAuth,isAuthorised("Super Admin"),removefromAuction);
 
 router.get("/overview",isAuth,isAuthorised("Super Admin"),fetchAdminOverview)
+router.get("/operations",isAuth,isAuthorised("Super Admin"),fetchAdminOperations)
 router.get("/users/getall",isAuth,isAuthorised("Super Admin"),fetchAllusers)
 router.get("/users/list",isAuth,isAuthorised("Super Admin"),fetchUsersList)
 router.put("/users/status/:id",isAuth,isAuthorised("Super Admin"),updateUserStatus)
