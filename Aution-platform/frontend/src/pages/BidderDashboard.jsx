@@ -346,7 +346,7 @@ const BidderDashboard = () => {
                         title={auction.title}
                         subtitle={getWinnerNextAction(auction).label}
                         value={formatCurrency(auction.currentBid)}
-                        to={`/auction/item/${auction._id}`}
+                        to={getWinnerNextAction(auction).to}
                         tone="emerald"
                       />
                     ))}

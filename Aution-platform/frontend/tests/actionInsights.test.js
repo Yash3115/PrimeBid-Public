@@ -20,7 +20,7 @@ test("winner next action asks for delivery address before shipment starts", () =
 
   assert.equal(action.label, "Add delivery address");
   assert.equal(action.priority, "critical");
-  assert.equal(action.to, "/won-auctions");
+  assert.equal(action.to, "/won-auctions#won-auction-auction-1");
 });
 
 test("bidder next actions prioritize won auction handoff and outbid alerts", () => {
@@ -43,6 +43,7 @@ test("bidder next actions prioritize won auction handoff and outbid alerts", () 
     ["winner-actions", "outbid"]
   );
   assert.equal(actions[0].priority, "critical");
+  assert.equal(actions[0].to, "/won-auctions#won-auction-auction-1");
   assert.equal(actions[1].to, "/auction/item/auction-2");
 });
 

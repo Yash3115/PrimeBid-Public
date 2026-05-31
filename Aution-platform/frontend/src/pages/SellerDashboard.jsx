@@ -396,7 +396,7 @@ const MiniMetric = ({ label, value }) => (
 const Panel = ({ title, children, id }) => (
   <section
     id={id}
-    className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6"
+    className="scroll-mt-24 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6"
   >
     <h2 className="mb-4 text-xl font-semibold text-slate-950">{title}</h2>
     {children}

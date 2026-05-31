@@ -182,7 +182,10 @@ const WonAuctionCard = ({ auction, currentUser }) => {
   };
 
   return (
-    <div className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[160px_1fr]">
+    <div
+      id={`won-auction-${auction._id}`}
+      className="scroll-mt-24 grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[160px_1fr]"
+    >
       <img
         src={auction.image?.url || "/imageHolder.jpg"}
         alt={auction.title}

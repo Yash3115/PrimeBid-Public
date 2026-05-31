@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import SideDrawer from "./layout/SideDrawer";
 import ErrorBoundary from "./custom-components/ErrorBoundary";
+import RouteUtilities from "./custom-components/RouteUtilities";
 import Spinner from "./custom-components/Spinner";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -140,6 +141,7 @@ const App = () => {
   return (
     <Router>
       <SessionExpiredHandler />
+      <RouteUtilities />
       <SideDrawer />
       <ErrorBoundary>
         <Suspense fallback={<Spinner />}>

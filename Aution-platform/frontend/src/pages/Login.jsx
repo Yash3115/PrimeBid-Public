@@ -1,8 +1,9 @@
 import { googleLogin, login } from "@/store/slices/userSlice";
+import { getSafeRedirectPath } from "@/lib/navigation";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
@@ -15,12 +16,14 @@ const Login = () => {
   const { loading, isAuthenticated } = useSelector((state) => state.user);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectPath = getSafeRedirectPath(location.state?.from);
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/");
+      navigate(redirectPath, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, redirectPath]);
 
   useEffect(() => {
     if (!googleClientId) {
@@ -37,7 +40,7 @@ const Login = () => {
         callback: async ({ credential }) => {
           const result = await dispatch(googleLogin({ credential }));
           if (result?.success) {
-            navigate("/");
+            navigate(redirectPath, { replace: true });
           }
         },
       });
@@ -66,13 +69,13 @@ const Login = () => {
     return () => {
       script.onload = null;
     };
-  }, [dispatch, navigate]);
+  }, [dispatch, navigate, redirectPath]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     const result = await dispatch(login({ email, password }));
     if (result?.success) {
-      navigate("/");
+      navigate(redirectPath, { replace: true });
     }
   };
 

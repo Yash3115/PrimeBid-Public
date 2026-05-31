@@ -191,12 +191,13 @@ const register = asyncErrorHandler(async (req, res, next) => {
 
 const login = asyncErrorHandler(async (req, res, next) => {
     const { email, password } = req.body;
-    if(!email||!password){
+    const normalizedEmail = String(email || "").toLowerCase().trim();
+    if(!normalizedEmail||!password){
         const err = new Error("Please fill the full form");
         err.statusCode = 400;
         return next(err);
     }
-    const user = await User.findOne({email: email.toLowerCase()}).select("+password");
+    const user = await User.findOne({email: normalizedEmail}).select("+password");
     if(!user){
         const err = new Error("User Don't exist");
         err.statusCode = 400;

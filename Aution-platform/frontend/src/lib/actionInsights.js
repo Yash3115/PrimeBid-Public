@@ -10,10 +10,14 @@ const toNumber = (value) => {
   return Number.isFinite(number) ? number : 0;
 };
 
+const getWonAuctionPath = (auction = {}) =>
+  auction._id ? `/won-auctions#won-auction-${auction._id}` : "/won-auctions";
+
 export const getWinnerNextAction = (auction = {}) => {
   const fulfillment = auction.fulfillment;
   const status = fulfillment?.status || FULFILLMENT_STATUS.AWAITING_ADDRESS;
   const hasAddress = Boolean(fulfillment?.deliveryAddress?.addressLine1);
+  const to = getWonAuctionPath(auction);
 
   if (status === FULFILLMENT_STATUS.ISSUE_REPORTED) {
     return {
@@ -21,7 +25,7 @@ export const getWinnerNextAction = (auction = {}) => {
       label: "Issue reported",
       detail: "Review the shipment notes and contact support if needed.",
       actionLabel: "Review issue",
-      to: "/won-auctions",
+      to,
       priority: "critical",
     };
   }
@@ -32,7 +36,7 @@ export const getWinnerNextAction = (auction = {}) => {
       label: "Confirm delivery",
       detail: "Confirm receipt to release escrow to the seller.",
       actionLabel: "Confirm received",
-      to: "/won-auctions",
+      to,
       priority: "critical",
     };
   }
@@ -43,7 +47,7 @@ export const getWinnerNextAction = (auction = {}) => {
       label: "Add delivery address",
       detail: `${auction.title || "Won auction"} is waiting for your shipping details.`,
       actionLabel: "Add address",
-      to: "/won-auctions",
+      to,
       priority: "critical",
     };
   }
@@ -54,7 +58,7 @@ export const getWinnerNextAction = (auction = {}) => {
       label: "Seller preparing shipment",
       detail: "Your address is saved. The seller needs to ship next.",
       actionLabel: "View handoff",
-      to: "/won-auctions",
+      to,
       priority: "medium",
     };
   }
@@ -69,7 +73,7 @@ export const getWinnerNextAction = (auction = {}) => {
       label: getFulfillmentLabel(status),
       detail: "Tracking updates are available for this won auction.",
       actionLabel: "Track order",
-      to: "/won-auctions",
+      to,
       priority: "medium",
     };
   }
@@ -86,7 +90,7 @@ export const getWinnerNextAction = (auction = {}) => {
           ? "The disputed escrow was returned to your wallet."
           : "Close the loop by rating your seller experience.",
       actionLabel: "Review seller",
-      to: "/won-auctions",
+      to,
       priority: "low",
     };
   }
@@ -96,7 +100,7 @@ export const getWinnerNextAction = (auction = {}) => {
     label: getFulfillmentLabel(status),
     detail: "Check the winner handoff for the latest status.",
     actionLabel: "View win",
-    to: "/won-auctions",
+    to,
     priority: "low",
   };
 };

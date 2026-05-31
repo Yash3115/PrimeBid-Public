@@ -170,10 +170,12 @@ export const register = (data) => async (dispatch) => {
     );
     toast.success(response.data.message);
     dispatch(userSlice.actions.clearAllErrors());
+    return response.data;
   } catch (error) {
     dispatch(userSlice.actions.registerFailed());
     toastApiError(error);
     dispatch(userSlice.actions.clearAllErrors());
+    return { success: false };
   }
 };
 

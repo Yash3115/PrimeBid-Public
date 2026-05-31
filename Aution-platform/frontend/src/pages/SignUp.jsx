@@ -1,8 +1,9 @@
+import { getSafeRedirectPath } from "@/lib/navigation";
 import { register } from "@/store/slices/userSlice";
 import { ImagePlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 /* eslint-disable react/prop-types */
 const SignUp = () => {
@@ -21,15 +22,17 @@ const SignUp = () => {
 
   const { loading, isAuthenticated } = useSelector((state) => state.user);
   const navigateTo = useNavigate();
+  const location = useLocation();
   const dispatch = useDispatch();
+  const redirectPath = getSafeRedirectPath(location.state?.from);
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigateTo("/");
+      navigateTo(redirectPath, { replace: true });
     }
-  }, [isAuthenticated, navigateTo]);
+  }, [isAuthenticated, navigateTo, redirectPath]);
 
-  const handleRegister = (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
     const formData = new FormData();
     formData.append("userName", userName);
@@ -47,7 +50,10 @@ const SignUp = () => {
       formData.append("bankName", bankName);
     }
 
-    dispatch(register(formData));
+    const result = await dispatch(register(formData));
+    if (result?.success) {
+      navigateTo(redirectPath, { replace: true });
+    }
   };
 
   const imageHandler = (e) => {

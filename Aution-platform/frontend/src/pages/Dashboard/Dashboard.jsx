@@ -302,7 +302,7 @@ const Dashboard = () => {
               <div
                 key={title}
                 id={id}
-                className="overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6"
+                className="scroll-mt-24 overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6"
               >
                 <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-slate-950">
                   <Icon className="h-5 w-5 text-indigo-600" />

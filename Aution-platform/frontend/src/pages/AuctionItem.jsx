@@ -477,6 +477,7 @@ const AuctionItem = () => {
                         </Link>
                         <Link
                           to="/sign-up"
+                          state={{ from: `${location.pathname}${location.search}` }}
                           className="inline-flex min-h-11 items-center justify-center rounded-md border border-white/15 px-4 py-2 font-semibold text-white transition hover:bg-white/10"
                         >
                           Create Bidder Account
