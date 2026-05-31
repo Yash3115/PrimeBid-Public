@@ -47,6 +47,7 @@ const SellerDashboard = lazy(() => import("./pages/SellerDashboard"));
 const BidderDashboard = lazy(() => import("./pages/BidderDashboard"));
 const KycVerification = lazy(() => import("./pages/KycVerification"));
 const Wallet = lazy(() => import("./pages/Wallet"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const protectedRoutePrefixes = [
   "/auction/details/",
@@ -166,6 +167,7 @@ const App = () => {
             <Route path="/dashboard" element={<RoleDashboard />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/me" element={<UserProfile />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </ErrorBoundary>

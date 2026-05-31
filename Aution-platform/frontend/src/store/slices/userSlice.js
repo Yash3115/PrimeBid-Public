@@ -1,7 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { toast } from "react-toastify";
 import { api, getErrorMessage, toastApiError } from "@/lib/api";
-import { clearAuthToken, setAuthToken } from "@/lib/authToken";
+import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/authToken";
 import { resetWallet } from "./walletSlice";
 
 const userSlice = createSlice({
@@ -247,6 +247,11 @@ export const logout = () => async (dispatch) => {
 };
 
 export const fetchUser = () => async (dispatch, getState) => {
+  if (!getAuthToken()) {
+    dispatch(userSlice.actions.fetchUserFailed());
+    return;
+  }
+
   dispatch(userSlice.actions.fetchUserRequest());
   try {
     const response = await api.get("/user/me");
@@ -260,6 +265,7 @@ export const fetchUser = () => async (dispatch, getState) => {
   } catch (error) {
     const requestStartedAt = error.config?.metadata?.requestStartedAt;
     const authenticatedAt = getState().user.authenticatedAt;
+    const status = error?.response?.status;
 
     if (
       error.isAuthSessionError &&
@@ -272,6 +278,9 @@ export const fetchUser = () => async (dispatch, getState) => {
 
     dispatch(userSlice.actions.fetchUserFailed());
     dispatch(userSlice.actions.clearAllErrors());
+    if (status === 401) {
+      return;
+    }
     console.error(error);
   }
 };
