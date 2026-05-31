@@ -26,6 +26,20 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
+      - key: SMTP_SERVICE
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_MAIL
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
       - key: AI_FEATURES_ENABLED
         value: "true"
       - key: GEMINI_MODEL
@@ -44,6 +58,12 @@ services:
       - key: VITE_API_BASE_URL
         sync: false
       - key: VITE_GOOGLE_CLIENT_ID
+        sync: false
+      - key: VITE_EMAILJS_SERVICE_ID
+        sync: false
+      - key: VITE_EMAILJS_TEMPLATE_ID
+        sync: false
+      - key: VITE_EMAILJS_PUBLIC_KEY
         sync: false
     routes:
       - type: rewrite

@@ -66,6 +66,13 @@ CLIENT_URL=https://your-frontend-domain
 FRONTEND_URL=https://your-frontend-domain
 CRON_SECRET=replace-with-a-long-random-secret
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+SMTP_SERVICE=gmail
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_MAIL=your-smtp-login@example.com
+SMTP_PASSWORD=your-smtp-app-password
+SMTP_FROM="PrimeBid <your-smtp-login@example.com>"
 AI_FEATURES_ENABLED=true
 GEMINI_MODEL=gemini-2.0-flash
 GEMINI_API_KEY=your-gemini-key
@@ -77,6 +84,8 @@ Notes:
 - Trailing slashes are safe, but exact origins are still best.
 - Keep `COOKIE_SECURE=true` on HTTPS hosting.
 - The API also accepts `Authorization: Bearer <token>` for deployed frontends where cross-site cookies are blocked.
+- Email delivery is used for auction-winner emails. Use either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT`. If `SMTP_HOST` is set, the backend uses host/port and ignores the service shortcut.
+- Common SMTP ports: `465` means SSL/TLS (`SMTP_SECURE=true`), while `587` means STARTTLS (`SMTP_SECURE=false`). Gmail typically requires an app password, not your normal password.
 
 ## Frontend Environment Variables
 
@@ -85,9 +94,14 @@ Set these for the frontend service:
 ```bash
 VITE_API_BASE_URL=https://your-backend-domain/api/v1
 VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+VITE_EMAILJS_SERVICE_ID=your-emailjs-service-id
+VITE_EMAILJS_TEMPLATE_ID=your-emailjs-template-id
+VITE_EMAILJS_PUBLIC_KEY=your-emailjs-public-key
 ```
 
 If the frontend and backend are deployed behind the same domain with `/api/v1` routed to the backend, `VITE_API_BASE_URL` can be omitted and the app will use `/api/v1`.
+
+The EmailJS variables power the frontend Contact form. Configure the EmailJS service/template to accept the same template fields used by the app: `name`, `email`, `phone`, `subject`, and `message`.
 
 ## Vercel Deployment
 
@@ -130,6 +144,8 @@ Set:
 
 - Backend `CLIENT_URL` and `FRONTEND_URL` to the deployed frontend URL.
 - Frontend `VITE_API_BASE_URL` to `https://your-api-domain/api/v1`.
+- Backend `SMTP_*` variables if you want auction-winner emails in production.
+- Frontend `VITE_EMAILJS_*` variables if you want the Contact form to send emails in production.
 
 Free Render services may sleep when idle, so the first request can be slow and in-process cron may not run while the service is sleeping.
 
@@ -168,5 +184,7 @@ Then verify from the frontend:
 - Login works locally but not deployed: check `COOKIE_SECURE=true`, `CLIENT_URL`, `FRONTEND_URL`, and `VITE_API_BASE_URL`.
 - CORS error: set the exact frontend origin in backend `CLIENT_URL` and `FRONTEND_URL`.
 - Auction does not settle after ending: run `/api/v1/cron/all` with the `Authorization` header and check backend logs.
+- Winner email does not send: verify `SMTP_MAIL`, `SMTP_PASSWORD`, and either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT` in the backend environment.
+- Contact form does not send: verify `VITE_EMAILJS_SERVICE_ID`, `VITE_EMAILJS_TEMPLATE_ID`, and `VITE_EMAILJS_PUBLIC_KEY` in the frontend environment, then rebuild/redeploy the frontend.
 - Frontend refresh returns 404: confirm Vercel rewrites or Netlify redirects are active.
 - MongoDB connection fails: confirm the Atlas connection string, database user password, and Atlas network access settings.

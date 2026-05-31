@@ -3,6 +3,13 @@ import { Mail, MessageSquare, Phone, UserRound } from "lucide-react";
 import { useState } from "react";
 import { toast } from "react-toastify";
 
+const emailJsServiceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+const emailJsTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+const emailJsPublicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+const isEmailJsConfigured = Boolean(
+  emailJsServiceId && emailJsTemplateId && emailJsPublicKey
+);
+
 const Contact = () => {
   const [form, setForm] = useState({
     name: "",
@@ -17,20 +24,26 @@ const Contact = () => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleContactForm = (e) => {
+  const handleContactForm = async (e) => {
     e.preventDefault();
+
+    if (!isEmailJsConfigured) {
+      toast.error("Contact email is not configured yet.");
+      return;
+    }
+
     setLoading(true);
 
-    emailjs
-      .send("service_7fi3blx", "template_uoz4u0q", form, "vu8NQbdo_al3pcY5t")
-      .then(() => {
-        toast.success("Thank you. Your message has been sent.");
-        setForm({ name: "", email: "", phone: "", subject: "", message: "" });
-      })
-      .catch(() => {
-        toast.error("Failed to send message.");
-      })
-      .finally(() => setLoading(false));
+    try {
+      await emailjs.send(emailJsServiceId, emailJsTemplateId, form, emailJsPublicKey);
+      toast.success("Thank you. Your message has been sent.");
+      setForm({ name: "", email: "", phone: "", subject: "", message: "" });
+    } catch (error) {
+      console.error("Contact email failed:", error);
+      toast.error("Failed to send message.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputClass =
@@ -144,10 +157,17 @@ const Contact = () => {
           <button
             className="mt-6 w-full rounded-md bg-indigo-600 px-5 py-3 font-semibold text-white transition duration-200 hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300 sm:w-auto"
             type="submit"
-            disabled={loading}
+            disabled={loading || !isEmailJsConfigured}
           >
             {loading ? "Sending..." : "Send Message"}
           </button>
+          {!isEmailJsConfigured && (
+            <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              Contact email is not configured. Add VITE_EMAILJS_SERVICE_ID,
+              VITE_EMAILJS_TEMPLATE_ID, and VITE_EMAILJS_PUBLIC_KEY to the
+              frontend environment.
+            </p>
+          )}
         </form>
       </div>
     </section>

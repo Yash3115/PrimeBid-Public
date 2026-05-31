@@ -198,7 +198,14 @@ export const runEndedAuctionTasks = async () => {
           const message = settlement.settled
             ? `Dear ${bidder.userName}, \n\nCongratulations! You have won the auction for ${auction.title}. Your winning amount has been captured from your PrimeBid wallet. \n\nSeller contact email: ${auctioneer.email}\n`
             : `Dear ${bidder.userName}, \n\nCongratulations! You have won the auction for ${auction.title}. PrimeBid could not capture the wallet settlement automatically, so please contact support before making any external payment. \n\nSeller contact email: ${auctioneer.email}\n`;
-          await sendEmail({ email: bidder.email, subject, message });
+          try {
+            await sendEmail({ email: bidder.email, subject, message });
+          } catch (emailError) {
+            console.error(
+              `Winner email failed for auction ${auction._id}:`,
+              emailError?.message || emailError
+            );
+          }
         }
       } else {
         await releaseAuctionBidLocks({
