@@ -17,6 +17,20 @@ export const formatDateTime = (date) => {
   }).format(parsedDate);
 };
 
+export const formatCompactDateTime = (date) => {
+  if (!date) return "Not set";
+
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return "Not set";
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parsedDate);
+};
+
 export const formatSellerRating = (reputationOrAverage, ratingCount) => {
   const reputation =
     reputationOrAverage && typeof reputationOrAverage === "object"

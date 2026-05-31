@@ -58,9 +58,13 @@ const RecentlyViewed = () => {
                 startingBid={auction.startingBid}
                 currentBid={auction.currentBid}
                 category={auction.category}
+                description={auction.description}
+                minimumBidIncrement={auction.minimumBidIncrement}
+                bidCount={auction.bids?.length || 0}
                 runtimeStatus={auction.runtimeStatus}
                 auctionServerTime={auction.serverTime}
                 createdBy={auction.createdBy}
+                sellerQuality={auction.sellerQuality}
               />
             ))}
           </div>

@@ -79,7 +79,7 @@ const CardTwo = ({
 
   return (
     <>
-      <div className="app-card app-card-hover overflow-hidden">
+      <div className="app-card app-card-hover flex min-h-[460px] flex-col overflow-hidden">
         <div className="relative aspect-[4/3] bg-slate-100">
           <img
             src={imgSrc || "/imageHolder.jpg"}
@@ -99,7 +99,7 @@ const CardTwo = ({
             </span>
           )}
         </div>
-        <div className="grid gap-4 p-4">
+        <div className="flex flex-1 flex-col justify-between gap-4 p-4">
           <div>
             <h3 className="line-clamp-2 text-lg font-semibold text-slate-950">
               {title}
@@ -107,20 +107,20 @@ const CardTwo = ({
             <div className="mt-3 grid grid-cols-2 gap-3">
               <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
                 Current
-                <span className="block truncate text-lg font-bold text-slate-950">
+                <span className="block break-words text-lg font-bold leading-tight text-slate-950 tabular-nums">
                   {formatCurrency(currentBid || startingBid)}
                 </span>
               </p>
               <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
                 Starting
-                <span className="block truncate text-lg font-bold text-slate-950">
+                <span className="block break-words text-lg font-bold leading-tight text-slate-950 tabular-nums">
                   {formatCurrency(startingBid)}
                 </span>
               </p>
             </div>
           </div>
 
-          <div className="rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700">
+          <div className="flex min-h-11 items-center rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm font-semibold leading-5 text-indigo-700">
             {status === "Draft"
               ? "Draft saved"
               : Object.keys(timeLeft).length
@@ -130,7 +130,7 @@ const CardTwo = ({
           <div className="grid grid-cols-2 gap-3 text-sm text-slate-500">
             <p className="rounded-md bg-slate-50 px-3 py-2">
               Increment
-              <span className="block font-semibold text-slate-950">
+              <span className="block break-words font-semibold leading-tight text-slate-950 tabular-nums">
                 {formatCurrency(minimumBidIncrement || 100)}
               </span>
             </p>

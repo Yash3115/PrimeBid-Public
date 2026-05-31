@@ -1,4 +1,8 @@
-import { formatCurrency, formatDateTime, getAuctionStatus } from "@/lib/format";
+import {
+  formatCompactDateTime,
+  formatCurrency,
+  getAuctionStatus,
+} from "@/lib/format";
 import {
   ArrowRight,
   BadgeCheck,
@@ -86,21 +90,21 @@ const Home = () => {
     <>
       <section className="app-page">
         <div className="app-container flex flex-col gap-8">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-stretch">
+          <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_380px] 2xl:items-stretch">
             <div className="page-header flex min-h-[440px] flex-col justify-between overflow-hidden bg-slate-950 p-0 text-white">
-              <div className="grid gap-6 p-5 sm:p-6 md:p-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+              <div className="grid gap-8 p-5 sm:p-6 md:p-8 2xl:grid-cols-[minmax(0,1fr)_minmax(280px,380px)] 2xl:items-center">
                 <div className="min-w-0">
                   <p className="max-w-xs text-xs font-bold uppercase leading-5 text-indigo-200 tracking-[0.14em]">
                     Trusted auction marketplace
                   </p>
-                  <h1 className="mt-4 text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
+                  <h1 className="mt-4 max-w-[9ch] text-5xl font-bold leading-[0.98] sm:text-6xl 2xl:text-7xl">
                     PrimeBid
                   </h1>
-                  <p className="mt-4 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
+                  <p className="mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
                     Browse live lots, understand the next bid, and participate
                     with wallet-backed confidence from one focused marketplace.
                   </p>
-                  <div className="mt-7 flex flex-wrap gap-3">
+                  <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                     <Link
                       to="/auctions"
                       className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-white px-5 py-3 font-bold text-slate-950 transition hover:bg-indigo-50"
@@ -131,9 +135,9 @@ const Home = () => {
                 {heroAuction && (
                   <Link
                     to={`/auction/item/${heroAuction._id}`}
-                    className="group overflow-hidden rounded-lg border border-white/10 bg-white/10 shadow-2xl shadow-slate-950/30 transition hover:bg-white/15"
+                    className="group w-full max-w-md justify-self-start overflow-hidden rounded-lg border border-white/10 bg-white/10 shadow-2xl shadow-slate-950/30 transition hover:-translate-y-0.5 hover:bg-white/15 2xl:max-w-none 2xl:justify-self-end"
                   >
-                    <div className="relative aspect-[4/3] bg-slate-800">
+                    <div className="relative aspect-[16/10] bg-slate-800">
                       <img
                         src={heroAuction.image?.url || "/imageHolder.jpg"}
                         alt={heroAuction.title}
@@ -148,23 +152,23 @@ const Home = () => {
                       <p className="line-clamp-2 text-xl font-bold leading-snug text-white">
                         {heroAuction.title}
                       </p>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-md bg-white/10 p-3">
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1 min-[1560px]:grid-cols-2">
+                        <div className="min-h-[92px] rounded-md bg-white/10 p-3">
                           <p className="text-xs font-semibold text-slate-300">
                             Current bid
                           </p>
-                          <p className="mt-1 text-xl font-bold">
+                          <p className="mt-1 break-words text-2xl font-bold leading-tight tabular-nums">
                             {formatCurrency(
                               heroAuction.currentBid || heroAuction.startingBid
                             )}
                           </p>
                         </div>
-                        <div className="rounded-md bg-white/10 p-3">
+                        <div className="min-h-[92px] rounded-md bg-white/10 p-3">
                           <p className="text-xs font-semibold text-slate-300">
                             Ends
                           </p>
-                          <p className="mt-1 text-sm font-bold leading-6">
-                            {formatDateTime(heroAuction.endTime)}
+                          <p className="mt-1 text-lg font-bold leading-tight tabular-nums">
+                            {formatCompactDateTime(heroAuction.endTime)}
                           </p>
                         </div>
                       </div>
@@ -172,13 +176,13 @@ const Home = () => {
                   </Link>
                 )}
               </div>
-              <div className="grid border-t border-white/10 bg-white/[0.04] sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid border-t border-white/10 bg-white/[0.04] sm:grid-cols-2 lg:grid-cols-4">
                 {trustSignals.map(([Icon, label]) => (
                   <div
                     key={label}
-                    className="flex min-h-14 items-center gap-3 border-t border-white/10 px-5 py-3 text-sm font-semibold text-slate-200 first:border-t-0 sm:border-l sm:first:border-l-0 sm:[&:nth-child(2)]:border-t-0 xl:border-t-0"
+                    className="flex min-h-14 items-center gap-3 border-t border-white/10 px-5 py-3 text-sm font-semibold leading-5 text-slate-200 first:border-t-0 sm:border-l sm:first:border-l-0 sm:[&:nth-child(2)]:border-t-0 lg:border-t-0"
                   >
-                    <Icon className="h-5 w-5 text-indigo-200" />
+                    <Icon className="h-5 w-5 shrink-0 text-indigo-200" />
                     {label}
                   </div>
                 ))}
@@ -219,7 +223,7 @@ const Home = () => {
                     <Link
                       key={auction._id}
                       to={`/auction/item/${auction._id}`}
-                      className="grid gap-3 rounded-md border border-slate-200 p-3 transition hover:border-indigo-200 hover:bg-indigo-50 sm:grid-cols-[56px_1fr_auto] sm:items-center"
+                      className="grid gap-3 rounded-md border border-slate-200 p-3 transition hover:border-indigo-200 hover:bg-indigo-50 sm:grid-cols-[56px_minmax(0,1fr)_auto] sm:items-center"
                     >
                       <img
                         src={auction.image?.url || "/imageHolder.jpg"}
@@ -231,11 +235,11 @@ const Home = () => {
                           {auction.title}
                         </span>
                         <span className="mt-1 flex items-center gap-1 text-xs font-semibold text-slate-500">
-                          <Clock3 className="h-3.5 w-3.5" />
-                          {formatDateTime(auction.endTime)}
+                          <Clock3 className="h-3.5 w-3.5 shrink-0" />
+                          {formatCompactDateTime(auction.endTime)}
                         </span>
                       </span>
-                      <span className="w-fit rounded-md bg-indigo-50 px-2.5 py-1.5 text-sm font-bold text-indigo-700">
+                      <span className="w-fit max-w-full break-words rounded-md bg-indigo-50 px-2.5 py-1.5 text-sm font-bold leading-tight text-indigo-700 tabular-nums">
                         {formatCurrency(auction.currentBid || auction.startingBid)}
                       </span>
                     </Link>

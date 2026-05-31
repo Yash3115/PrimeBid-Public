@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Heart } from "lucide-react";
+import { Clock3, Heart } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
-import { formatCurrency, getAuctionCountdown, getAuctionStatus } from "@/lib/format";
+import {
+  formatCompactDateTime,
+  formatCurrency,
+  getAuctionCountdown,
+  getAuctionStatus,
+} from "@/lib/format";
 import {
   getTrustBadgeClass,
   normalizeTrustBadges,
@@ -74,6 +79,9 @@ const Card = ({
 
   const latestBid = Number(currentBid || startingBid || 0);
   const trustBadges = normalizeTrustBadges(sellerQuality, createdBy).slice(0, 2);
+  const scheduleLabel =
+    status === "Upcoming" ? "Starts" : status === "Ended" ? "Ended" : "Ends";
+  const scheduleDate = status === "Upcoming" ? startTime : endTime;
   const handleWatchlist = (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -85,7 +93,7 @@ const Card = ({
   };
 
   return (
-    <article className="app-card app-card-hover group relative flex min-h-[360px] flex-col overflow-hidden">
+    <article className="app-card app-card-hover group relative flex min-h-[400px] flex-col overflow-hidden">
       {isAuthenticated && !isOwnAuction && (
         <button
           type="button"
@@ -133,25 +141,31 @@ const Card = ({
           </h5>
         </Link>
         <div className="space-y-3">
-          <div className="grid gap-3 min-[380px]:grid-cols-2">
-            <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
+          <div className="grid gap-3 min-[420px]:grid-cols-2">
+            <p className="min-h-[74px] rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
               Current
-              <span className="block break-words text-lg font-bold leading-tight text-slate-950">
+              <span className="block break-words text-lg font-bold leading-tight text-slate-950 tabular-nums">
                 {formatCurrency(latestBid)}
               </span>
             </p>
-            <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
+            <p className="min-h-[74px] rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
               Starting
-              <span className="block break-words text-lg font-bold leading-tight text-slate-950">
+              <span className="block break-words text-lg font-bold leading-tight text-slate-950 tabular-nums">
                 {formatCurrency(startingBid)}
               </span>
             </p>
           </div>
-          <p className="rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700">
-            {Object.keys(timeLeft).length > 1
-              ? `${timeLeft.type}: ${formatTimeLeft(timeLeft)}`
-              : "Time's up!"}
-          </p>
+          <div className="rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700">
+            <span className="flex items-center gap-2 leading-5">
+              <Clock3 className="h-4 w-4 shrink-0" />
+              {Object.keys(timeLeft).length > 1
+                ? `${timeLeft.type}: ${formatTimeLeft(timeLeft)}`
+                : "Time's up!"}
+            </span>
+            <span className="mt-1 block text-xs font-medium text-indigo-900/70">
+              {scheduleLabel} {formatCompactDateTime(scheduleDate)}
+            </span>
+          </div>
           <div className="flex flex-wrap gap-2">
             {trustBadges.map((badge) => (
               <span

@@ -1,5 +1,10 @@
 import { useAuctionTicker } from "@/hooks/useAuctionTicker";
-import { formatCurrency, getAuctionStatus, getServerNowMs } from "@/lib/format";
+import {
+  formatCompactDateTime,
+  formatCurrency,
+  getAuctionStatus,
+  getServerNowMs,
+} from "@/lib/format";
 import { RiAuctionFill } from "react-icons/ri";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
@@ -21,12 +26,6 @@ const UpcomingAuctions = () => {
         "Upcoming"
     );
   });
-
-  const formatTime = (date) =>
-    new Intl.DateTimeFormat("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(date));
 
   return (
     <>
@@ -55,14 +54,14 @@ const UpcomingAuctions = () => {
               <Link
                 to={`/auction/item/${element._id}`}
                 key={element._id}
-                className="flex gap-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-indigo-200 hover:shadow-md"
+                className="flex min-w-0 gap-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-indigo-200 hover:shadow-md"
               >
                 <img
                   src={element.image?.url || "/imageHolder.jpg"}
                   alt={element.title}
                   className="h-20 w-20 shrink-0 rounded-md object-cover"
                 />
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="line-clamp-2 font-semibold leading-6 text-slate-950">
                     {element.title}
                   </p>
@@ -70,7 +69,7 @@ const UpcomingAuctions = () => {
                     {formatCurrency(element.currentBid || element.startingBid)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {formatTime(element.startTime)}
+                    {formatCompactDateTime(element.startTime)}
                   </p>
                 </div>
               </Link>

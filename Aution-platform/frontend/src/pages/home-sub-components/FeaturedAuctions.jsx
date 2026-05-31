@@ -21,6 +21,9 @@ const FeaturedAuctions = () => {
                   startingBid={element.startingBid}
                   currentBid={element.currentBid}
                   category={element.category}
+                  description={element.description}
+                  minimumBidIncrement={element.minimumBidIncrement}
+                  bidCount={element.bids?.length || 0}
                   runtimeStatus={element.runtimeStatus}
                   auctionServerTime={element.serverTime}
                   createdBy={element.createdBy}

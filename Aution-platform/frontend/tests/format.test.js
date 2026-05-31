@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatReviewCount, formatSellerRating } from "../src/lib/format.js";
+import {
+  formatCompactDateTime,
+  formatReviewCount,
+  formatSellerRating,
+} from "../src/lib/format.js";
 
 test("shows no rating yet when a seller has no reviews", () => {
   assert.equal(
@@ -16,4 +20,11 @@ test("formats seller ratings only when reviews exist", () => {
   );
   assert.equal(formatReviewCount(1), "1 review");
   assert.equal(formatReviewCount(8), "8 reviews");
+});
+
+test("formats compact dates for tight UI cards", () => {
+  const formatted = formatCompactDateTime("2026-05-31T04:23:05.000Z");
+
+  assert.match(formatted, /May/);
+  assert.ok(formatted.length < 20);
 });
