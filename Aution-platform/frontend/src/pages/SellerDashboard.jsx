@@ -21,6 +21,12 @@ import {
   formatSellerRating,
 } from "@/lib/format";
 import {
+  formatPercent,
+  getSellerRiskClass,
+  getSellerRiskSummary,
+  getTrustBadgeClass,
+} from "@/lib/sellerQuality";
+import {
   getSellerDashboard,
   respondToFulfillmentIssue,
   updateFulfillmentStatus,
@@ -66,6 +72,7 @@ const SellerDashboard = () => {
   }, [authChecked, dispatch, isAuthenticated, navigateTo, user.role]);
 
   const stats = sellerDashboard?.stats;
+  const sellerQuality = stats?.sellerQuality;
   const availableBalance = Number(wallet.availableBalance || 0);
   const endingSoon = sellerDashboard?.endingSoon || [];
   const noBidAuctions = sellerDashboard?.noBidAuctions || [];
@@ -77,6 +84,7 @@ const SellerDashboard = () => {
     fulfillmentQueue,
     healthQueue,
     noBidAuctions,
+    sellerQuality,
   });
   const readyToShipCount = Number(stats?.fulfillment?.ReadyToShip || 0);
   const awaitingAddressCount = Number(stats?.fulfillment?.AwaitingAddress || 0);
@@ -110,6 +118,14 @@ const SellerDashboard = () => {
       value: formatCurrency(availableBalance),
       detail: "Wallet balance available for payout",
       icon: Wallet,
+    },
+    {
+      label: "Risk Level",
+      value: sellerQuality?.riskLevel || "Low",
+      detail: sellerQuality
+        ? `${sellerQuality.riskScore}/100 seller quality score`
+        : "Seller quality score",
+      icon: ShieldCheck,
     },
   ];
 
@@ -179,6 +195,14 @@ const SellerDashboard = () => {
                 label="Platform fee"
                 value="5%"
               />
+              <MiniMetric
+                label="Risk"
+                value={sellerQuality?.riskLevel || "Low"}
+              />
+              <MiniMetric
+                label="Disputes"
+                value={formatPercent(sellerQuality?.disputeRate)}
+              />
             </div>
           </div>
         </div>
@@ -207,6 +231,9 @@ const SellerDashboard = () => {
               actions={nextActions}
             />
 
+            <Panel id="account-health" title="Account Quality">
+              <SellerQualityPanel quality={sellerQuality} />
+            </Panel>
             <Panel id="fulfillment" title="Fulfillment Queue">
               {fulfillmentQueue.length > 0 ? (
                 <div className="grid gap-4">
@@ -262,7 +289,7 @@ const SellerDashboard = () => {
                 )}
               </Panel>
 
-              <Panel title="Seller Attention Queue">
+              <Panel id="seller-attention" title="Seller Attention Queue">
                 <div className="grid gap-3">
                   {noBidAuctions.map((auction) => (
                     <AuctionRow
@@ -440,6 +467,71 @@ const getInitialSellerStatus = (status) =>
   )
     ? FULFILLMENT_STATUS.SHIPPED
     : status;
+
+const SellerQualityPanel = ({ quality }) => {
+  if (!quality) {
+    return (
+      <EmptyState
+        title="Seller quality is being calculated"
+        text="Risk, dispute, and delivery signals will appear after your first completed auction."
+      />
+    );
+  }
+
+  const metrics = [
+    ["Completed sales", quality.completedSales || 0],
+    ["Dispute rate", formatPercent(quality.disputeRate)],
+    ["Refund rate", formatPercent(quality.refundRate)],
+    ["Open disputes", quality.openDisputes || 0],
+    ["Delayed shipments", quality.lateShipmentCount || 0],
+    ["Delivery confirmation", formatPercent(quality.deliveryConfirmationRate)],
+  ];
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
+      <div className={`rounded-lg border p-4 ${getSellerRiskClass(quality.riskLevel)}`}>
+        <p className="text-xs font-bold uppercase tracking-[0.12em]">
+          Seller risk
+        </p>
+        <p className="mt-2 text-3xl font-bold">
+          {quality.riskLevel} - {quality.riskScore}/100
+        </p>
+        <p className="mt-2 text-sm leading-6">{getSellerRiskSummary(quality)}</p>
+      </div>
+
+      <div className="grid gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {metrics.map(([label, value]) => (
+            <MiniMetric key={label} label={label} value={value} />
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(quality.trustBadges || []).map((badge) => (
+            <span
+              key={badge.id}
+              className={`rounded-md border px-3 py-1.5 text-xs font-bold ${getTrustBadgeClass(
+                badge.tone
+              )}`}
+              title={badge.description}
+            >
+              {badge.label}
+            </span>
+          ))}
+        </div>
+        <div className="rounded-md bg-slate-50 p-3">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+            Improvement signals
+          </p>
+          <div className="mt-2 grid gap-1 text-sm text-slate-700">
+            {(quality.reasons || []).slice(0, 4).map((reason) => (
+              <p key={reason}>{reason}</p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SellerFulfillmentCard = ({ fulfillment }) => {
   const dispatch = useDispatch();

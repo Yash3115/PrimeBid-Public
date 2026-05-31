@@ -15,8 +15,47 @@ import {
 } from "../utils/auctionStatus.js";
 import { storeUploadedFile } from "../utils/fileStorage.js";
 import { SETTLEMENT_STATUS } from "../utils/fulfillment.js";
+import {
+    buildSellerQualityMap,
+    buildSellerQualityProfile,
+} from "../utils/sellerQuality.js";
 
 const allowedImageFormats = ["image/png", "image/jpeg", "image/webp"];
+
+const toSellerId = (seller) =>
+    seller?._id?.toString?.() || seller?.toString?.() || "";
+
+const attachSellerQuality = async (items, now, sellerAuctions = items) => {
+    const timedItems = withAuctionTimings(items, now);
+    const sellers = timedItems
+        .map((item) => item.createdBy)
+        .filter((seller) => seller && typeof seller === "object");
+    const sellerIds = [...new Set(sellers.map(toSellerId).filter(Boolean))];
+
+    if (!sellerIds.length) return timedItems;
+
+    const [fulfillments, allSellerAuctions] = await Promise.all([
+        Fulfillment.find({ seller: { $in: sellerIds } })
+            .select("seller status settlementStatus settlement dispute addressSubmittedAt shipping updatedAt")
+            .lean(),
+        sellerAuctions === items
+            ? Promise.resolve(sellerAuctions)
+            : Auction.find({ createdBy: { $in: sellerIds } })
+                .select("createdBy status startTime endTime")
+                .lean(),
+    ]);
+    const sellerQualityMap = buildSellerQualityMap({
+        sellers,
+        fulfillments,
+        auctions: allSellerAuctions,
+        now,
+    });
+
+    return timedItems.map((item) => ({
+        ...item,
+        sellerQuality: sellerQualityMap.get(toSellerId(item.createdBy)) || null,
+    }));
+};
 
 const getListingIntelligence = ({ title = "", description = "", startingBid = 0, category = "", condition = "" }) => {
     let score = 0;
@@ -184,13 +223,15 @@ const getAllItem = asyncErrorHandler(async(req,res,next)=>{
     const now = new Date();
     const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 200);
     let items = await Auction.find({ status: { $ne: "Draft" } })
+        .populate("createdBy", "userName reputation kycStatus accountStatus createdAt")
         .sort({ endTime: 1, createdAt: -1 })
         .limit(limit);
+    const itemsWithQuality = await attachSellerQuality(items, now);
     return res.status(200).json({
         success: true,
         serverTime: now.toISOString(),
-        items: withAuctionTimings(items, now),
-        count: items.length,
+        items: itemsWithQuality,
+        count: itemsWithQuality.length,
     })
 })
 
@@ -278,18 +319,24 @@ const getAuctionDetails = asyncErrorHandler(async(req,res,next)=>{
         return next(err);
     }
 
-    const auctionItem = await Auction.findById(id).populate("createdBy", "userName email reputation");
+    const auctionItem = await Auction.findById(id).populate(
+        "createdBy",
+        "userName email reputation kycStatus accountStatus createdAt"
+    );
     if(!auctionItem){
         const err = new Error("Auction not found");
         err.statusCode = 404;
         return next(err);
     }
     const bidders = [...auctionItem.bids].sort((a,b)=> b.amount-a.amount);
-    const myAutoBid = findAutoBidByUser(auctionItem.autoBids, req.user._id);
+    const myAutoBid = req.user?._id
+        ? findAutoBidByUser(auctionItem.autoBids, req.user._id)
+        : null;
+    const [auctionWithQuality] = await attachSellerQuality([auctionItem], now, null);
     return res.status(200).json({
         success: true,
         serverTime: now.toISOString(),
-        auctionItem: withAuctionTiming(auctionItem, now),
+        auctionItem: auctionWithQuality || withAuctionTiming(auctionItem, now),
         bidders,
         myAutoBid: myAutoBid
             ? {
@@ -542,6 +589,15 @@ const getSellerDashboard = asyncErrorHandler(async(req,res,next)=>{
     const totalBids = items.reduce((total, item) => total + (item.bids?.length || 0), 0);
     const topAuction = [...items].sort((a,b) => Number(b.currentBid || 0) - Number(a.currentBid || 0))[0] || null;
     const reviews = await Review.find({ seller: req.user._id }).sort({ createdAt: -1 }).limit(8);
+    const sellerFulfillments = await Fulfillment.find({ seller: req.user._id })
+        .select("seller status settlementStatus settlement dispute addressSubmittedAt shipping updatedAt")
+        .lean();
+    const sellerQuality = buildSellerQualityProfile({
+        seller: req.user,
+        fulfillments: sellerFulfillments,
+        auctions: items,
+        now,
+    });
     const watcherStats = await User.countDocuments({ watchlist: { $in: items.map((item) => item._id) } });
     const byEndingSoon = (a, b) => new Date(a.endTime) - new Date(b.endTime);
     const byRecentUpdate = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt);
@@ -596,6 +652,7 @@ const getSellerDashboard = asyncErrorHandler(async(req,res,next)=>{
             platformFeeRate: 0.05,
             fulfillment: fulfillmentStats,
             reputation: req.user.reputation || { ratingAverage: 0, ratingCount: 0 },
+            sellerQuality,
         },
         topAuction: topAuction ? withAuctionTiming(topAuction, now) : null,
         endingSoon: withAuctionTimings(endingSoon, now),
@@ -661,6 +718,16 @@ const reviewSeller = asyncErrorHandler(async(req,res,next)=>{
     if(auction.highestBidder?.toString() !== req.user._id.toString()){
         const err = new Error("Only the winning bidder can rate this seller");
         err.statusCode = 403;
+        return next(err);
+    }
+    const completedFulfillment = await Fulfillment.findOne({
+        auction: auction._id,
+        bidder: req.user._id,
+        settlementStatus: SETTLEMENT_STATUS.RELEASED_TO_SELLER,
+    });
+    if(!completedFulfillment){
+        const err = new Error("You can rate the seller after delivery is confirmed and escrow is released");
+        err.statusCode = 400;
         return next(err);
     }
     const review = await Review.findOneAndUpdate(

@@ -11,6 +11,14 @@ import {
   getAuctionStatus,
 } from "@/lib/format";
 import {
+  formatPercent,
+  getSellerQuality,
+  getSellerRiskClass,
+  getSellerRiskSummary,
+  getTrustBadgeClass,
+  normalizeTrustBadges,
+} from "@/lib/sellerQuality";
+import {
   getAuctionDetail,
   getBidAdvice,
   summarizeAuction,
@@ -81,6 +89,7 @@ const AuctionItem = () => {
   const bidIncrement = Number(auctionDetail.minimumBidIncrement || 1);
   const nextBid = currentBid + bidIncrement;
   const createdById = auctionDetail.createdBy?._id || auctionDetail.createdBy;
+  const sellerQuality = getSellerQuality(auctionDetail);
   const isOwnAuction =
     createdById?.toString?.() === user?._id?.toString?.();
   const isSaved = watchlist.some((auction) => auction._id === auctionDetail._id);
@@ -324,7 +333,17 @@ const AuctionItem = () => {
                     <Info label="Ends" value={formatDateTime(auctionDetail.endTime)} />
                   </div>
                   <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                    <TrustNote icon={ShieldCheck} text="Seller account reviewed" />
+                    {normalizeTrustBadges(sellerQuality, auctionDetail.createdBy)
+                      .slice(0, 4)
+                      .map((badge) => (
+                        <TrustNote
+                          key={badge.id}
+                          icon={ShieldCheck}
+                          text={badge.label}
+                          tone={badge.tone}
+                          title={badge.description}
+                        />
+                      ))}
                     <TrustNote icon={WalletIcon} text="Wallet funds are held visibly" />
                     <TrustNote icon={BadgeCheck} text="Winning bid settles automatically" />
                     <TrustNote icon={Timer} text={`${auctionDetail.antiSnipingExtensionMinutes || 0} min anti-sniping extension`} />
@@ -656,6 +675,11 @@ const AuctionItem = () => {
               </form>
             </div>
 
+            <SellerTrustPanel
+              seller={auctionDetail.createdBy}
+              quality={sellerQuality}
+            />
+
             <div className="order-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6 2xl:col-span-2">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-950">
@@ -703,6 +727,57 @@ const AuctionItem = () => {
   );
 };
 
+const SellerTrustPanel = ({ seller, quality }) => {
+  const badges = normalizeTrustBadges(quality, seller);
+  const metrics = [
+    ["Completed sales", quality?.completedSales || 0],
+    ["Dispute rate", formatPercent(quality?.disputeRate)],
+    ["Refund rate", formatPercent(quality?.refundRate)],
+    ["Seller risk", quality?.riskLevel || "Low"],
+  ];
+
+  return (
+    <aside className="order-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6 2xl:order-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="app-kicker">Seller Trust</p>
+          <h2 className="mt-2 text-xl font-bold text-slate-950">
+            {seller?.userName || "PrimeBid seller"}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            {getSellerRiskSummary(quality)}
+          </p>
+        </div>
+        <span
+          className={`w-fit rounded-md border px-3 py-2 text-sm font-bold ${getSellerRiskClass(
+            quality?.riskLevel
+          )}`}
+        >
+          {quality?.riskLevel || "Low"} risk
+        </span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {badges.map((badge) => (
+          <span
+            key={badge.id}
+            className={`rounded-md border px-2.5 py-1 text-xs font-bold ${getTrustBadgeClass(
+              badge.tone
+            )}`}
+            title={badge.description}
+          >
+            {badge.label}
+          </span>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {metrics.map(([label, value]) => (
+          <Info key={label} label={label} value={value} />
+        ))}
+      </div>
+    </aside>
+  );
+};
+
 const Info = ({ label, value }) => (
   <div className="rounded-md bg-slate-50 p-3">
     <p className="stat-label">{label}</p>
@@ -710,8 +785,13 @@ const Info = ({ label, value }) => (
   </div>
 );
 
-const TrustNote = ({ icon: Icon, text }) => (
-  <div className="flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+const TrustNote = ({ icon: Icon, text, tone = "slate", title }) => (
+  <div
+    className={`flex min-h-11 items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold ${getTrustBadgeClass(
+      tone
+    )}`}
+    title={title}
+  >
     <Icon className="h-4 w-4 shrink-0 text-indigo-600" />
     <span>{text}</span>
   </div>

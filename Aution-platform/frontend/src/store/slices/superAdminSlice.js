@@ -165,6 +165,46 @@ export const updateUserStatus = (id, accountStatus) => async (dispatch) => {
   }
 };
 
+export const warnSellerRisk =
+  (id, reason = "") =>
+  async (dispatch) => {
+    try {
+      const response = await api.post(
+        `/superadmin/users/${id}/warn-risk`,
+        { reason },
+        { headers: { "Content-Type": "application/json" } }
+      );
+      toast.success(response.data.message);
+      dispatch(getAuditLogs());
+      dispatch(getAdminOverview());
+      return response.data;
+    } catch (error) {
+      toastApiError(error);
+      return { success: false };
+    }
+  };
+
+export const requireSellerKycReview =
+  (id, reason = "") =>
+  async (dispatch) => {
+    try {
+      const response = await api.put(
+        `/superadmin/users/${id}/kyc-rereview`,
+        { reason },
+        { headers: { "Content-Type": "application/json" } }
+      );
+      toast.success(response.data.message);
+      dispatch(getAdminOverview());
+      dispatch(getUsersList());
+      dispatch(getKycSubmissions("Pending"));
+      dispatch(getAuditLogs());
+      return response.data;
+    } catch (error) {
+      toastApiError(error);
+      return { success: false };
+    }
+  };
+
 export const getKycSubmissions = (status = "Pending") => async (dispatch) => {
   try {
     const response = await api.get("/superadmin/kyc/submissions", {

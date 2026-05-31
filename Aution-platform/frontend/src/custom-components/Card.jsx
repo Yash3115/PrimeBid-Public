@@ -3,6 +3,10 @@ import { Heart } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import { formatCurrency, getAuctionCountdown, getAuctionStatus } from "@/lib/format";
+import {
+  getTrustBadgeClass,
+  normalizeTrustBadges,
+} from "@/lib/sellerQuality";
 import { addToWatchlist, removeFromWatchlist } from "@/store/slices/userSlice";
 
 /* eslint-disable react/prop-types */
@@ -24,6 +28,7 @@ const Card = ({
   runtimeStatus,
   auctionServerTime,
   createdBy,
+  sellerQuality,
   id,
 }) => {
   const { serverTime, serverTimeReceivedAt } = useSelector(
@@ -68,6 +73,7 @@ const Card = ({
   };
 
   const latestBid = Number(currentBid || startingBid || 0);
+  const trustBadges = normalizeTrustBadges(sellerQuality, createdBy).slice(0, 2);
   const handleWatchlist = (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -146,6 +152,19 @@ const Card = ({
               ? `${timeLeft.type}: ${formatTimeLeft(timeLeft)}`
               : "Time's up!"}
           </p>
+          <div className="flex flex-wrap gap-2">
+            {trustBadges.map((badge) => (
+              <span
+                key={badge.id}
+                className={`rounded-md border px-2.5 py-1 text-xs font-bold ${getTrustBadgeClass(
+                  badge.tone
+                )}`}
+                title={badge.description}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </article>

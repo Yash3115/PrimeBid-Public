@@ -78,6 +78,15 @@ test("wallet reconciliation warnings lead the admin action queue", () => {
   );
 });
 
+test("high-risk sellers are included in the admin action queue", () => {
+  const queue = buildAdminActionQueue({
+    highRiskSellers: 3,
+  });
+
+  assert.deepEqual(queue.map((item) => item.id), ["seller-risk"]);
+  assert.equal(queue[0].priority, "critical");
+});
+
 test("normalizes admin aggregate rows", () => {
   assert.deepEqual(countRowsById([{ _id: "Bidder", count: 3 }]), {
     Bidder: 3,

@@ -11,6 +11,7 @@ import {
   getSettlementLabel,
   getSettlementTone,
   hasOpenDispute,
+  SETTLEMENT_STATUS,
 } from "@/lib/fulfillment";
 import {
   formatCurrency,
@@ -133,6 +134,8 @@ const WonAuctionCard = ({ auction, currentUser }) => {
     seller.ratingAverage,
     seller.ratingCount
   );
+  const canReviewSeller =
+    fulfillment?.settlementStatus === SETTLEMENT_STATUS.RELEASED_TO_SELLER;
 
   useEffect(() => {
     setAddressForm(buildAddressForm(auction.fulfillment, currentUser));
@@ -366,10 +369,11 @@ const WonAuctionCard = ({ auction, currentUser }) => {
           <button
             type="button"
             onClick={() => dispatch(reviewSeller(auction._id, { rating, comment }))}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-700"
+            disabled={!canReviewSeller}
+            className="inline-flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-indigo-300"
           >
             <Star className="h-4 w-4" />
-            Save
+            {canReviewSeller ? "Save" : "Available after escrow release"}
           </button>
         </div>
       </div>

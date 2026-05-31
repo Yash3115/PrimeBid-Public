@@ -182,6 +182,7 @@ export const buildSellerNextActions = ({
   fulfillmentQueue = [],
   healthQueue = [],
   noBidAuctions = [],
+  sellerQuality = null,
 } = {}) => {
   const statusCount = (status) =>
     fulfillmentQueue.filter((fulfillment) => fulfillment.status === status).length;
@@ -194,6 +195,18 @@ export const buildSellerNextActions = ({
       hasActiveEscrow(fulfillment)
   ).length;
   const actions = [];
+
+  if (sellerQuality?.riskLevel === "High") {
+    actions.push({
+      id: "seller-risk",
+      label: "Seller quality risk",
+      count: 1,
+      detail: sellerQuality.reasons?.[0] || "Admin risk signals need attention.",
+      actionLabel: "View health",
+      to: "#account-health",
+      priority: "critical",
+    });
+  }
 
   if (issueCount > 0) {
     actions.push({
@@ -250,7 +263,7 @@ export const buildSellerNextActions = ({
       count: Math.max(healthQueue.length, noBidAuctions.length),
       detail: "Refresh weak listings before they close without bids.",
       actionLabel: "Review health",
-      to: "#health",
+      to: "#seller-attention",
       priority: "medium",
     });
   }

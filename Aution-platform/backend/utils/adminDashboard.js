@@ -66,6 +66,7 @@ export const buildAdminActionQueue = ({
     issueReported = 0,
     atRiskAuctions = 0,
     reconciliationWarnings = 0,
+    highRiskSellers = 0,
 } = {}) => {
     const queue = [
         {
@@ -82,6 +83,14 @@ export const buildAdminActionQueue = ({
             count: toNumber(pendingWithdrawals),
             detail: "Manual payout requests need admin approval",
             href: "#withdrawals",
+            priority: "critical",
+        },
+        {
+            id: "seller-risk",
+            label: "High-risk sellers",
+            count: toNumber(highRiskSellers),
+            detail: "Auctioneers with dispute, refund, or rating risk signals",
+            href: "#seller-risk",
             priority: "critical",
         },
         {

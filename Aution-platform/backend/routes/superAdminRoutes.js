@@ -6,6 +6,8 @@ import {
     fetchAllusers,
     fetchUsersList,
     updateUserStatus,
+    warnSellerRisk,
+    requireSellerKycReview,
     fetchKycSubmissions,
     updateKycStatus,
     fetchAuditLogs,
@@ -27,6 +29,8 @@ router.get("/overview",isAuth,isAuthorised("Super Admin"),fetchAdminOverview)
 router.get("/users/getall",isAuth,isAuthorised("Super Admin"),fetchAllusers)
 router.get("/users/list",isAuth,isAuthorised("Super Admin"),fetchUsersList)
 router.put("/users/status/:id",isAuth,isAuthorised("Super Admin"),updateUserStatus)
+router.post("/users/:id/warn-risk",isAuth,isAuthorised("Super Admin"),warnSellerRisk)
+router.put("/users/:id/kyc-rereview",isAuth,isAuthorised("Super Admin"),requireSellerKycReview)
 router.get("/kyc/submissions",isAuth,isAuthorised("Super Admin"),fetchKycSubmissions)
 router.put("/kyc/:id",isAuth,isAuthorised("Super Admin"),updateKycStatus)
 router.get("/audit-logs",isAuth,isAuthorised("Super Admin"),fetchAuditLogs)

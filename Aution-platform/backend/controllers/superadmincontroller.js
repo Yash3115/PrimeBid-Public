@@ -25,6 +25,7 @@ import {
     getPlatformSnapshot,
 } from "../utils/platformAccount.js";
 import { buildWalletReconciliation } from "../utils/walletReconciliation.js";
+import { SELLER_RISK_LEVEL, buildSellerQualityMap } from "../utils/sellerQuality.js";
 
 const escapeRegex = (value) =>
     String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -181,6 +182,87 @@ const updateUserStatus = asyncErrorHandler(async(req,res,next)=>{
     });
 });
 
+const warnSellerRisk = asyncErrorHandler(async(req,res,next)=>{
+    const { id } = req.params;
+    const reason = String(req.body.reason || "Your seller quality metrics need attention. Please resolve fulfillment issues and keep buyers updated.")
+        .trim()
+        .slice(0, 500);
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        const err = new Error("Invalid seller ID format");
+        err.statusCode = 400;
+        return next(err);
+    }
+    const seller = await User.findOne({ _id: id, role: "Auctioneer" });
+    if(!seller){
+        const err = new Error("Auctioneer not found");
+        err.statusCode = 404;
+        return next(err);
+    }
+    await AuditLog.create({
+        actor: req.user._id,
+        action: "SELLER_RISK_WARNING_SENT",
+        targetType: "User",
+        targetId: seller._id,
+        summary: `${seller.email} warned for seller quality risk`,
+    });
+    await createNotification({
+        user: seller._id,
+        type: "admin",
+        title: "Seller quality warning",
+        message: reason,
+        actionPath: "/seller-dashboard",
+    });
+    return res.status(200).json({
+        success: true,
+        message: "Seller warning sent",
+    });
+});
+
+const requireSellerKycReview = asyncErrorHandler(async(req,res,next)=>{
+    const { id } = req.params;
+    const reason = String(req.body.reason || "Admin requested a seller KYC re-review because of marketplace risk signals.")
+        .trim()
+        .slice(0, 500);
+    if(!mongoose.Types.ObjectId.isValid(id)){
+        const err = new Error("Invalid seller ID format");
+        err.statusCode = 400;
+        return next(err);
+    }
+    const seller = await User.findOneAndUpdate(
+        { _id: id, role: "Auctioneer" },
+        {
+            kycStatus: "Pending",
+            kycRejectionReason: reason,
+            kycSubmittedAt: new Date(),
+        },
+        { new: true }
+    ).select("-password");
+    if(!seller){
+        const err = new Error("Auctioneer not found");
+        err.statusCode = 404;
+        return next(err);
+    }
+    await AuditLog.create({
+        actor: req.user._id,
+        action: "SELLER_KYC_REVIEW_REQUIRED",
+        targetType: "User",
+        targetId: seller._id,
+        summary: `${seller.email} moved to KYC re-review`,
+    });
+    await createNotification({
+        user: seller._id,
+        type: "admin",
+        title: "KYC re-review required",
+        message: reason,
+        actionPath: "/kyc-verification",
+    });
+    return res.status(200).json({
+        success: true,
+        message: "Seller moved to KYC re-review",
+        seller,
+    });
+});
+
 const fetchKycSubmissions = asyncErrorHandler(async(req,res,next)=>{
     const { status = "Pending" } = req.query;
     const query = { role: "Auctioneer" };
@@ -286,6 +368,8 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         platformAccount,
         bidLockRows,
         platformTransactionAmountRows,
+        sellerRows,
+        sellerQualityFulfillments,
         recentPlatformTransactions,
         recentAuctions,
     ] = await Promise.all([
@@ -357,6 +441,12 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
                 },
             },
         ]),
+        User.find({ role: "Auctioneer" })
+            .select("userName email role accountStatus kycStatus reputation createdAt")
+            .lean(),
+        Fulfillment.find()
+            .select("seller status settlementStatus settlement dispute addressSubmittedAt shipping updatedAt")
+            .lean(),
         PlatformTransaction.find().sort({ createdAt: -1 }).limit(5).lean(),
         Auction.find()
             .select("title image currentBid status startTime endTime createdBy updatedAt")
@@ -394,6 +484,19 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         platformLedgerBalance,
         platformCommissionLedger,
     });
+    const sellerQualityMap = buildSellerQualityMap({
+        sellers: sellerRows,
+        fulfillments: sellerQualityFulfillments,
+        auctions,
+        now,
+    });
+    const allSellerQualityProfiles = [...sellerQualityMap.values()].sort(
+        (a, b) => b.riskScore - a.riskScore || b.openDisputes - a.openDisputes
+    );
+    const sellerQualityProfiles = allSellerQualityProfiles.slice(0, 25);
+    const highRiskSellers = allSellerQualityProfiles.filter(
+        (seller) => seller.riskLevel === SELLER_RISK_LEVEL.HIGH
+    );
     const auctionRuntime = buildAuctionRuntimeSummary(auctions, now);
     const activeNoBidAuctions = auctions.filter((auction) => {
         if (auction.status === "Draft" || (auction.bids || []).length > 0) {
@@ -413,6 +516,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         issueReported: openDisputeCount || fulfillment.IssueReported,
         atRiskAuctions: activeNoBidAuctions,
         reconciliationWarnings: reconciliation.warnings.length,
+        highRiskSellers: highRiskSellers.length,
     });
 
     return res.status(200).json({
@@ -441,6 +545,13 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
             },
             platform: platformSnapshot,
             reconciliation,
+            sellerRisk: {
+                highRiskCount: highRiskSellers.length,
+                mediumRiskCount: allSellerQualityProfiles.filter(
+                    (seller) => seller.riskLevel === SELLER_RISK_LEVEL.MEDIUM
+                ).length,
+                sellers: sellerQualityProfiles,
+            },
             actionQueue,
             recentPlatformTransactions,
             recentAuctions,
@@ -497,6 +608,8 @@ export {
     fetchAllusers,
     fetchUsersList,
     updateUserStatus,
+    warnSellerRisk,
+    requireSellerKycReview,
     fetchKycSubmissions,
     updateKycStatus,
     fetchAuditLogs,

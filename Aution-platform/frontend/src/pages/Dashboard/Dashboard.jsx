@@ -33,6 +33,7 @@ import UserManagement from "./sub-components/UserManagement";
 import KycManagement from "./sub-components/KycManagement";
 import WithdrawalManagement from "./sub-components/WithdrawalManagement";
 import DisputeManagement from "./sub-components/DisputeManagement";
+import SellerRiskManagement from "./sub-components/SellerRiskManagement";
 
 /* eslint-disable react/prop-types */
 
@@ -81,6 +82,7 @@ const Dashboard = () => {
     { icon: BadgeIndianRupee, title: "Auctioneer KYC", id: "kyc", content: <KycManagement /> },
     { icon: BadgeIndianRupee, title: "Wallet Withdrawals", id: "withdrawals", content: <WithdrawalManagement /> },
     { icon: AlertTriangle, title: "Delivery Disputes", id: "disputes", content: <DisputeManagement /> },
+    { icon: ShieldCheck, title: "Seller Risk", id: "seller-risk", content: <SellerRiskManagement /> },
     { icon: BarChart3, title: "Audit Log", id: "audit-log", content: <AuditLogs /> },
     {
       icon: Trash2,
@@ -161,6 +163,12 @@ const Dashboard = () => {
       label: "Fulfillment Queue",
       value: overview?.fulfillment?.ReadyToShip || 0,
       detail: `${overview?.disputes?.open || overview?.fulfillment?.IssueReported || 0} open disputes`,
+    },
+    {
+      icon: ShieldCheck,
+      label: "High-Risk Sellers",
+      value: overview?.sellerRisk?.highRiskCount || 0,
+      detail: `${overview?.sellerRisk?.mediumRiskCount || 0} medium-risk sellers`,
     },
   ];
   const opsQueue =
@@ -375,6 +383,14 @@ const OperationsPulse = ({ overview, opsQueue }) => {
       reconciliation?.platformAvailable?.status || "Pending",
     ],
   ];
+  const sellerRiskRows = [
+    ["High risk", overview?.sellerRisk?.highRiskCount || 0],
+    ["Medium risk", overview?.sellerRisk?.mediumRiskCount || 0],
+    [
+      "Tracked",
+      (overview?.sellerRisk?.sellers || []).length,
+    ],
+  ];
 
   return (
     <section
@@ -436,6 +452,7 @@ const OperationsPulse = ({ overview, opsQueue }) => {
           <MiniOpsList title="Fulfillment" icon={PackageCheck} rows={fulfillmentRows} />
           <MiniOpsList title="Escrow" icon={Wallet} rows={escrowRows} />
           <MiniOpsList title="Reconciliation" icon={ShieldCheck} rows={reconciliationRows} />
+          <MiniOpsList title="Seller risk" icon={AlertTriangle} rows={sellerRiskRows} />
         </div>
       </div>
 

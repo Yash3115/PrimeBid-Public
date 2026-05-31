@@ -307,6 +307,7 @@ const Auctions = () => {
                     runtimeStatus={element.runtimeStatus}
                     auctionServerTime={element.serverTime}
                     createdBy={element.createdBy}
+                    sellerQuality={element.sellerQuality}
                     id={element._id}
                     key={element._id}
                   />
