@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   DISPUTE_STATUS,
   FULFILLMENT_STATUS,
+  SETTLEMENT_STATUS,
   canEditDeliveryAddress,
+  canConfirmDelivery,
   disputeIssueTypeOptions,
   getAuctionIdFromFulfillment,
   getDisputeLabel,
@@ -11,6 +13,9 @@ import {
   getFulfillmentLabel,
   getFulfillmentTone,
   getIssueTypeLabel,
+  getSettlementLabel,
+  getSettlementTone,
+  hasActiveEscrow,
   hasOpenDispute,
   sellerShipmentStatusOptions,
 } from "../src/lib/fulfillment.js";
@@ -56,5 +61,32 @@ test("detects open disputes and exposes buyer issue options", () => {
   assert.equal(hasOpenDispute({ dispute: { isOpen: false } }), false);
   assert.ok(
     disputeIssueTypeOptions.some((option) => option.value === "SellerUnresponsive")
+  );
+});
+
+test("formats escrow settlement labels and confirmation state", () => {
+  assert.equal(
+    getSettlementLabel(SETTLEMENT_STATUS.HELD_IN_ESCROW),
+    "Held in escrow"
+  );
+  assert.ok(getSettlementTone(SETTLEMENT_STATUS.UNDER_DISPUTE).includes("red"));
+  assert.equal(
+    hasActiveEscrow({ settlementStatus: SETTLEMENT_STATUS.READY_TO_RELEASE }),
+    true
+  );
+  assert.equal(
+    canConfirmDelivery({
+      status: FULFILLMENT_STATUS.DELIVERED,
+      settlementStatus: SETTLEMENT_STATUS.READY_TO_RELEASE,
+    }),
+    true
+  );
+  assert.equal(
+    canConfirmDelivery({
+      status: FULFILLMENT_STATUS.DELIVERED,
+      settlementStatus: SETTLEMENT_STATUS.UNDER_DISPUTE,
+      dispute: { isOpen: true },
+    }),
+    false
   );
 });

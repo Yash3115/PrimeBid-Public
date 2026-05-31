@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   DISPUTE_STATUS,
   FULFILLMENT_STATUS,
+  SETTLEMENT_ACTION,
   getFulfillmentProgress,
   normalizeAdminDisputeReview,
   normalizeDeliveryAddress,
@@ -117,6 +118,7 @@ test("requires admin resolution notes for final dispute decisions", () => {
     {
       status: DISPUTE_STATUS.NEEDS_MORE_INFO,
       adminResolution: "",
+      settlementAction: SETTLEMENT_ACTION.NONE,
       isFinal: false,
     }
   );
@@ -132,6 +134,7 @@ test("requires admin resolution notes for final dispute decisions", () => {
     normalizeAdminDisputeReview({
       status: DISPUTE_STATUS.SELLER_FAVORED,
       adminResolution: "Courier proof confirms delivery to the address on file.",
+      settlementAction: SETTLEMENT_ACTION.RELEASE_TO_SELLER,
     }).isFinal,
     true
   );

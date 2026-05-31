@@ -1,7 +1,6 @@
 import User from "../models/userSchema.js";
 import Bid from "../models/bidSchema.js";
 import WalletTransaction from "../models/walletTransactionSchema.js";
-import { creditPlatformCommission } from "./platformAccount.js";
 
 export const WALLET_PAYMENT_METHODS = ["UPI", "Credit Card", "Debit Card"];
 
@@ -232,7 +231,6 @@ export const releaseAuctionBidLocks = async ({
 
 export const captureWinningBidFunds = async ({
     bidderId,
-    sellerId,
     auctionId,
     bidId,
     grossAmount,
@@ -253,8 +251,6 @@ export const captureWinningBidFunds = async ({
 
     const bidderBeforeUser = await User.findById(bidderId);
     if (!bidderBeforeUser) return { settled: false, reason: "Bidder not found" };
-    const sellerBeforeUser = await User.findById(sellerId);
-    if (!sellerBeforeUser) return { settled: false, reason: "Seller not found" };
     const bidderBefore = getWalletSnapshot(bidderBeforeUser);
     if (bidderBefore.lockedBalance < gross) {
         return { settled: false, reason: "Winning bid was not wallet locked" };
@@ -285,7 +281,7 @@ export const captureWinningBidFunds = async ({
         after: getWalletSnapshot(bidderAfterUser),
         auction: auctionId,
         bid: bidId,
-        note: "Winning bid captured after auction close",
+        note: "Winning bid captured into escrow after auction close",
     });
 
     const unusedLockedAmount = Math.max(winningBidLockedAmount - gross, 0);
@@ -301,62 +297,12 @@ export const captureWinningBidFunds = async ({
     winningBid.lockedAmount = 0;
     await winningBid.save();
 
-    let platformSettlement = null;
-    if (commission > 0) {
-        platformSettlement = await creditPlatformCommission({
-            amount: commission,
-            auctionId,
-            bidId,
-            bidderId,
-            auctioneerId: sellerId,
-            note: "Platform commission credited from wallet settlement",
-        });
-    }
-
-    if (sellerCredit > 0) {
-        const sellerBefore = getWalletSnapshot(sellerBeforeUser);
-        const sellerAfterUser = await User.findByIdAndUpdate(
-            sellerId,
-            {
-                $inc: {
-                    "wallet.availableBalance": sellerCredit,
-                },
-            },
-            { new: true }
-        );
-
-        await createTransaction({
-            user: sellerId,
-            type: "SALE_CREDIT",
-            amount: sellerCredit,
-            before: sellerBefore,
-            after: getWalletSnapshot(sellerAfterUser),
-            auction: auctionId,
-            bid: bidId,
-            note: "Auction sale proceeds credited after platform commission",
-        });
-    }
-
-    if (commission > 0) {
-        const seller = await User.findById(sellerId);
-        await createTransaction({
-            user: sellerId,
-            type: "COMMISSION_RETAINED",
-            amount: commission,
-            before: getWalletSnapshot(seller),
-            after: getWalletSnapshot(seller),
-            auction: auctionId,
-            bid: bidId,
-            note: "Platform commission transferred to platform account",
-        });
-    }
-
     return {
         settled: true,
+        captured: true,
         grossAmount: gross,
         commissionAmount: commission,
         sellerCredit,
-        platformAccount: platformSettlement?.account,
-        platformTransaction: platformSettlement?.transaction,
+        settlementStatus: "HeldInEscrow",
     };
 };

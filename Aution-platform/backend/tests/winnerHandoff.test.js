@@ -34,7 +34,7 @@ test("builds winner handoff with seller contact and payment details", () => {
   });
   assert.deepEqual(handoff.payment, {
     method: "PrimeBid wallet",
-    status: "Captured automatically at auction close",
+    status: "Held in escrow until delivery is confirmed",
   });
   assert.equal(handoff.nextSteps.length, 4);
 });
@@ -49,7 +49,7 @@ test("handles missing seller payment details without failing", () => {
 
   assert.deepEqual(handoff.payment, {
     method: "PrimeBid wallet",
-    status: "Captured automatically at auction close",
+    status: "Held in escrow until delivery is confirmed",
   });
   assert.equal(handoff.seller.userName, "Seller Only");
   assert.ok(handoff.nextSteps[0].includes("Seller Only"));
@@ -63,7 +63,7 @@ test("handles unpopulated seller safely", () => {
   assert.equal(handoff.seller, null);
   assert.deepEqual(handoff.payment, {
     method: "PrimeBid wallet",
-    status: "Captured automatically at auction close",
+    status: "Held in escrow until delivery is confirmed",
   });
   assert.equal(handoff.nextSteps.length, 4);
 });

@@ -5,12 +5,15 @@ import User from "../models/userSchema.js";
 
 import Bid from "../models/bidSchema.js";
 import Notification from "../models/notificationSchema.js";
-import Commission from "../models/commissionSchema.js";
 
 import { sendEmail } from "../utils/sendEmail.js";
 import { createNotification } from "../utils/notifications.js";
 import { calculateCommission } from "../controllers/commissioncontroller.js";
-import { ensureFulfillmentForAuction } from "../utils/fulfillment.js";
+import {
+  SETTLEMENT_STATUS,
+  ensureFulfillmentForAuction,
+} from "../utils/fulfillment.js";
+import { buildEscrowSettlement } from "../utils/escrowSettlement.js";
 import {
   captureWinningBidFunds,
   releaseAuctionBidLocks,
@@ -104,7 +107,15 @@ export const runEndedAuctionTasks = async () => {
           bidderId: highestBidder.bidder.id,
           sellerId: auctioneer._id,
           winningAmount: highestBidder.amount,
-          settlementStatus: settlement.settled ? "WalletCaptured" : "NeedsReview",
+          settlementStatus: settlement.settled
+            ? SETTLEMENT_STATUS.HELD_IN_ESCROW
+            : SETTLEMENT_STATUS.NEEDS_REVIEW,
+          settlement: settlement.settled
+            ? buildEscrowSettlement({
+                grossAmount: settlement.grossAmount,
+                commissionAmount: settlement.commissionAmount,
+              })
+            : {},
         });
 
         const bidder = await User.findById(highestBidder.bidder.id);
@@ -115,7 +126,6 @@ export const runEndedAuctionTasks = async () => {
               $inc: {
                 moneySpent: Number(highestBidder.amount),
                 auctionsWon: 1,
-                "buyerStats.completedPurchases": settlement.settled ? 1 : 0,
               },
             },
             { new: true }
@@ -126,7 +136,7 @@ export const runEndedAuctionTasks = async () => {
             type: "auction_won",
             title: "You won an auction",
             message: settlement.settled
-              ? `You won ${auction.title}. Payment was captured from your wallet.`
+              ? `You won ${auction.title}. Payment is held safely in PrimeBid escrow until delivery is confirmed.`
               : `You won ${auction.title}. Settlement needs review before shipment.`,
             actionPath: "/won-auctions",
           });
@@ -143,33 +153,12 @@ export const runEndedAuctionTasks = async () => {
         }
 
         if (settlement.settled) {
-          if (settlement.commissionAmount > 0) {
-            await Commission.findOneAndUpdate(
-              {
-                auction: auction._id,
-                collectionMethod: "WalletSettlement",
-              },
-              {
-                amount: settlement.commissionAmount,
-                user: auctioneer._id,
-                auctioneer: auctioneer._id,
-                bidder: highestBidder.bidder.id,
-                auction: auction._id,
-                bid: highestBidder._id,
-                platformAccount: settlement.platformAccount?._id,
-                platformTransaction: settlement.platformTransaction?._id,
-                collectionMethod: "WalletSettlement",
-                status: "Collected",
-              },
-              { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-          }
           await createNotification({
             user: auctioneer._id,
             auction: auction._id,
             type: "wallet",
-            title: "Sale proceeds credited",
-            message: `${auction.title} proceeds were credited to your wallet after commission.`,
+            title: "Sale funds held in escrow",
+            message: `${auction.title} funds are held in escrow. Payout unlocks after buyer confirmation or admin review.`,
             actionPath: "/seller-dashboard",
           });
           if (fulfillmentCreated) {
@@ -196,7 +185,7 @@ export const runEndedAuctionTasks = async () => {
         if (bidder?.email) {
           const subject = `Congratulations! You won the auction for ${auction.title}`;
           const message = settlement.settled
-            ? `Dear ${bidder.userName}, \n\nCongratulations! You have won the auction for ${auction.title}. Your winning amount has been captured from your PrimeBid wallet. \n\nSeller contact email: ${auctioneer.email}\n`
+            ? `Dear ${bidder.userName}, \n\nCongratulations! You have won the auction for ${auction.title}. Your winning amount is now held safely in PrimeBid escrow until delivery is confirmed. \n\nSeller contact email: ${auctioneer.email}\n`
             : `Dear ${bidder.userName}, \n\nCongratulations! You have won the auction for ${auction.title}. PrimeBid could not capture the wallet settlement automatically, so please contact support before making any external payment. \n\nSeller contact email: ${auctioneer.email}\n`;
           try {
             await sendEmail({ email: bidder.email, subject, message });

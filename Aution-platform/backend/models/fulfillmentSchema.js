@@ -120,8 +120,38 @@ const fulfillmentSchema = new mongoose.Schema(
     },
     settlementStatus: {
       type: String,
-      enum: ["WalletCaptured", "NeedsReview"],
-      default: "WalletCaptured",
+      enum: [
+        "WalletCaptured",
+        "NeedsReview",
+        "HeldInEscrow",
+        "ReadyToRelease",
+        "ReleasedToSeller",
+        "RefundedToBuyer",
+        "UnderDispute",
+      ],
+      default: "HeldInEscrow",
+    },
+    settlement: {
+      escrowAmount: { type: Number, default: 0, min: 0 },
+      commissionAmount: { type: Number, default: 0, min: 0 },
+      sellerPayoutAmount: { type: Number, default: 0, min: 0 },
+      capturedAt: Date,
+      deliveryConfirmedAt: Date,
+      releasedAt: Date,
+      refundedAt: Date,
+      reviewedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      platformTransaction: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "PlatformTransaction",
+      },
+      commission: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Commission",
+      },
+      note: { type: String, trim: true },
     },
     status: {
       type: String,
@@ -156,6 +186,7 @@ fulfillmentSchema.index({ bidder: 1, updatedAt: -1 });
 fulfillmentSchema.index({ seller: 1, status: 1, updatedAt: -1 });
 fulfillmentSchema.index({ auction: 1, bidder: 1 });
 fulfillmentSchema.index({ "dispute.isOpen": 1, updatedAt: -1 });
+fulfillmentSchema.index({ settlementStatus: 1, updatedAt: -1 });
 
 const Fulfillment = mongoose.model("Fulfillment", fulfillmentSchema);
 

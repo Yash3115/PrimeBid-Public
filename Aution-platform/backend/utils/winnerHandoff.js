@@ -35,7 +35,7 @@ export const buildWinnerHandoff = (auction) => {
       : null,
     payment: {
       method: "PrimeBid wallet",
-      status: "Captured automatically at auction close",
+      status: "Held in escrow until delivery is confirmed",
     },
     nextSteps: [
       `Add the delivery address where ${sellerName} should ship the item.`,

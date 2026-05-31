@@ -45,6 +45,19 @@ const transactions = [
     createdAt: "2026-01-01T10:10:00.000Z",
     withdrawal: { _id: "withdrawal-1", status: "Pending" },
   },
+  {
+    _id: "t4",
+    type: "ESCROW_REFUND",
+    amount: 5000,
+    status: "Completed",
+    availableBefore: 3000,
+    availableAfter: 8000,
+    lockedBefore: 7000,
+    lockedAfter: 7000,
+    createdAt: "2026-01-01T10:20:00.000Z",
+    auction: { _id: "auction-1", title: "Camera" },
+    note: "Admin refunded escrow",
+  },
 ];
 
 test("builds wallet transaction meta with linked auction context", () => {
@@ -59,15 +72,16 @@ test("builds wallet transaction meta with linked auction context", () => {
 });
 
 test("filters wallet transactions by operational group", () => {
-  assert.equal(filterWalletTransactions(transactions, "all").length, 3);
-  assert.equal(filterWalletTransactions(transactions, "credits").length, 1);
+  assert.equal(filterWalletTransactions(transactions, "all").length, 4);
+  assert.equal(filterWalletTransactions(transactions, "credits").length, 2);
   assert.equal(filterWalletTransactions(transactions, "locks").length, 2);
   assert.equal(filterWalletTransactions(transactions, "withdrawals").length, 1);
+  assert.equal(filterWalletTransactions(transactions, "settlements").length, 1);
 });
 
 test("summarizes recent wallet movement", () => {
   assert.deepEqual(summarizeWalletTransactions(transactions), {
-    moneyIn: 10000,
+    moneyIn: 15000,
     reserved: 7000,
     released: 0,
     settled: 0,

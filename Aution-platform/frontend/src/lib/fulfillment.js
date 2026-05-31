@@ -7,6 +7,22 @@ export const FULFILLMENT_STATUS = {
   ISSUE_REPORTED: "IssueReported",
 };
 
+export const SETTLEMENT_STATUS = {
+  WALLET_CAPTURED: "WalletCaptured",
+  NEEDS_REVIEW: "NeedsReview",
+  HELD_IN_ESCROW: "HeldInEscrow",
+  READY_TO_RELEASE: "ReadyToRelease",
+  RELEASED_TO_SELLER: "ReleasedToSeller",
+  REFUNDED_TO_BUYER: "RefundedToBuyer",
+  UNDER_DISPUTE: "UnderDispute",
+};
+
+export const SETTLEMENT_ACTION = {
+  NONE: "None",
+  RELEASE_TO_SELLER: "ReleaseToSeller",
+  REFUND_BUYER: "RefundBuyer",
+};
+
 export const fulfillmentStatusLabels = {
   [FULFILLMENT_STATUS.AWAITING_ADDRESS]: "Awaiting address",
   [FULFILLMENT_STATUS.READY_TO_SHIP]: "Ready to ship",
@@ -68,6 +84,38 @@ export const disputeIssueTypeOptions = [
   { value: "Other", label: "Other issue" },
 ];
 
+export const settlementStatusLabels = {
+  [SETTLEMENT_STATUS.WALLET_CAPTURED]: "Legacy captured",
+  [SETTLEMENT_STATUS.NEEDS_REVIEW]: "Needs review",
+  [SETTLEMENT_STATUS.HELD_IN_ESCROW]: "Held in escrow",
+  [SETTLEMENT_STATUS.READY_TO_RELEASE]: "Ready to release",
+  [SETTLEMENT_STATUS.RELEASED_TO_SELLER]: "Released to seller",
+  [SETTLEMENT_STATUS.REFUNDED_TO_BUYER]: "Refunded to buyer",
+  [SETTLEMENT_STATUS.UNDER_DISPUTE]: "Blocked by dispute",
+};
+
+export const settlementStatusTone = {
+  [SETTLEMENT_STATUS.WALLET_CAPTURED]: "bg-slate-100 text-slate-700",
+  [SETTLEMENT_STATUS.NEEDS_REVIEW]: "bg-amber-50 text-amber-700",
+  [SETTLEMENT_STATUS.HELD_IN_ESCROW]: "bg-indigo-50 text-indigo-700",
+  [SETTLEMENT_STATUS.READY_TO_RELEASE]: "bg-blue-50 text-blue-700",
+  [SETTLEMENT_STATUS.RELEASED_TO_SELLER]: "bg-emerald-50 text-emerald-700",
+  [SETTLEMENT_STATUS.REFUNDED_TO_BUYER]: "bg-slate-100 text-slate-700",
+  [SETTLEMENT_STATUS.UNDER_DISPUTE]: "bg-red-50 text-red-700",
+};
+
+export const settlementActionOptions = [
+  { value: SETTLEMENT_ACTION.RELEASE_TO_SELLER, label: "Release to seller" },
+  { value: SETTLEMENT_ACTION.REFUND_BUYER, label: "Refund buyer" },
+  { value: SETTLEMENT_ACTION.NONE, label: "No money action yet" },
+];
+
+export const activeEscrowSettlementStatuses = [
+  SETTLEMENT_STATUS.HELD_IN_ESCROW,
+  SETTLEMENT_STATUS.READY_TO_RELEASE,
+  SETTLEMENT_STATUS.UNDER_DISPUTE,
+];
+
 export const getFulfillmentLabel = (status) =>
   fulfillmentStatusLabels[status] || "Awaiting address";
 
@@ -99,3 +147,17 @@ export const getIssueTypeLabel = (issueType) =>
 
 export const hasOpenDispute = (fulfillment) =>
   Boolean(fulfillment?.dispute?.isOpen);
+
+export const getSettlementLabel = (status) =>
+  settlementStatusLabels[status] || "Settlement unavailable";
+
+export const getSettlementTone = (status) =>
+  settlementStatusTone[status] || "bg-slate-100 text-slate-700";
+
+export const hasActiveEscrow = (fulfillment) =>
+  activeEscrowSettlementStatuses.includes(fulfillment?.settlementStatus);
+
+export const canConfirmDelivery = (fulfillment) =>
+  fulfillment?.status === FULFILLMENT_STATUS.DELIVERED &&
+  hasActiveEscrow(fulfillment) &&
+  !hasOpenDispute(fulfillment);

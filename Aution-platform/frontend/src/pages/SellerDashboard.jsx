@@ -9,6 +9,8 @@ import {
   getFulfillmentLabel,
   getFulfillmentTone,
   getIssueTypeLabel,
+  getSettlementLabel,
+  getSettlementTone,
   hasOpenDispute,
   sellerShipmentStatusOptions,
 } from "@/lib/fulfillment";
@@ -33,6 +35,7 @@ import {
   Gavel,
   PackageCheck,
   Plus,
+  ShieldCheck,
   Star,
   Truck,
   Users,
@@ -550,6 +553,8 @@ const SellerFulfillmentCard = ({ fulfillment }) => {
           />
         )}
 
+        <SellerSettlementPanel fulfillment={fulfillment} />
+
         <form className="grid gap-3 md:grid-cols-2" onSubmit={handleSubmit}>
           <label className="grid gap-1">
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -714,6 +719,57 @@ const DisputeResponsePanel = ({
       </p>
     )}
   </section>
+);
+
+const SellerSettlementPanel = ({ fulfillment }) => {
+  const settlement = fulfillment?.settlement || {};
+  const settlementStatus = fulfillment?.settlementStatus;
+
+  return (
+    <section className="grid gap-3 rounded-md border border-indigo-100 bg-indigo-50 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-indigo-700">
+            <ShieldCheck className="h-4 w-4" />
+            Escrow payout
+          </p>
+          <p className="mt-1 text-sm leading-6 text-indigo-900">
+            Payout unlocks after buyer confirmation or admin dispute resolution.
+          </p>
+        </div>
+        <span
+          className={`w-fit rounded-md px-3 py-2 text-sm font-bold ${getSettlementTone(
+            settlementStatus
+          )}`}
+        >
+          {getSettlementLabel(settlementStatus)}
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MiniSettlementMetric
+          label="Escrow"
+          value={formatCurrency(settlement.escrowAmount || fulfillment.winningAmount || 0)}
+        />
+        <MiniSettlementMetric
+          label="Fee"
+          value={formatCurrency(settlement.commissionAmount || 0)}
+        />
+        <MiniSettlementMetric
+          label="Payout"
+          value={formatCurrency(settlement.sellerPayoutAmount || 0)}
+        />
+      </div>
+    </section>
+  );
+};
+
+const MiniSettlementMetric = ({ label, value }) => (
+  <div className="rounded-md border border-indigo-100 bg-white p-3">
+    <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+      {label}
+    </p>
+    <p className="mt-1 font-bold text-slate-950">{value}</p>
+  </div>
 );
 
 export default SellerDashboard;

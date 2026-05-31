@@ -14,6 +14,7 @@ import {
     withAuctionTimings,
 } from "../utils/auctionStatus.js";
 import { storeUploadedFile } from "../utils/fileStorage.js";
+import { SETTLEMENT_STATUS } from "../utils/fulfillment.js";
 
 const allowedImageFormats = ["image/png", "image/jpeg", "image/webp"];
 
@@ -556,7 +557,18 @@ const getSellerDashboard = asyncErrorHandler(async(req,res,next)=>{
     const recentAuctions = [...items].sort(byRecentUpdate).slice(0, 6);
     const fulfillmentQueue = await Fulfillment.find({
         seller: req.user._id,
-        status: { $ne: "Delivered" },
+        $or: [
+            { status: { $ne: "Delivered" } },
+            {
+                settlementStatus: {
+                    $in: [
+                        SETTLEMENT_STATUS.HELD_IN_ESCROW,
+                        SETTLEMENT_STATUS.READY_TO_RELEASE,
+                        SETTLEMENT_STATUS.UNDER_DISPUTE,
+                    ],
+                },
+            },
+        ],
     })
         .populate("auction", "title image currentBid endTime")
         .populate("bidder", "userName email phone profileImage")

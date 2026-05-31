@@ -88,7 +88,7 @@ export const buildAdminActionQueue = ({
             label: "Delivery issues",
             count: toNumber(issueReported),
             detail: "Orders where buyer or seller reported a problem",
-            href: "#operations",
+            href: "#disputes",
             priority: "critical",
         },
         {

@@ -1,5 +1,6 @@
 import Spinner from "@/custom-components/Spinner";
 import {
+  canConfirmDelivery,
   canEditDeliveryAddress,
   disputeIssueTypeOptions,
   getDisputeLabel,
@@ -7,6 +8,8 @@ import {
   getFulfillmentLabel,
   getFulfillmentTone,
   getIssueTypeLabel,
+  getSettlementLabel,
+  getSettlementTone,
   hasOpenDispute,
 } from "@/lib/fulfillment";
 import {
@@ -17,6 +20,7 @@ import {
 } from "@/lib/format";
 import { reviewSeller } from "@/store/slices/auctionSlice";
 import {
+  confirmFulfillmentDelivery,
   fetchWonAuctions,
   reportFulfillmentIssue,
   submitDeliveryAddress,
@@ -25,9 +29,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  IndianRupee,
   Mail,
   MapPin,
   Phone,
+  ShieldCheck,
   Star,
   Trophy,
   Truck,
@@ -166,6 +172,10 @@ const WonAuctionCard = ({ auction, currentUser }) => {
     if (response?.success) {
       setIssueForm({ issueType: "NotDelivered", description: "" });
     }
+  };
+
+  const handleConfirmDelivery = () => {
+    dispatch(confirmFulfillmentDelivery(auction._id));
   };
 
   return (
@@ -311,7 +321,12 @@ const WonAuctionCard = ({ auction, currentUser }) => {
           )}
         </section>
 
-        <ShipmentPanel fulfillment={fulfillment} />
+        <SettlementPanel fulfillment={fulfillment} />
+
+        <ShipmentPanel
+          fulfillment={fulfillment}
+          onConfirmDelivery={handleConfirmDelivery}
+        />
 
         <DisputePanel
           fulfillment={fulfillment}
@@ -416,15 +431,81 @@ const DeliveryAddressForm = ({
   </form>
 );
 
-const ShipmentPanel = ({ fulfillment }) => {
-  const shipping = fulfillment?.shipping || {};
-  const timeline = fulfillment?.timeline || [];
+const SettlementPanel = ({ fulfillment }) => {
+  const settlement = fulfillment?.settlement || {};
+  const settlementStatus = fulfillment?.settlementStatus;
 
   return (
     <section className="grid gap-4 rounded-md border border-slate-200 bg-white p-4">
-      <div className="flex items-center gap-2">
-        <Truck className="h-5 w-5 text-indigo-600" />
-        <h3 className="font-semibold text-slate-950">Shipment updates</h3>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-indigo-600" />
+          <h3 className="font-semibold text-slate-950">Escrow settlement</h3>
+        </div>
+        <span
+          className={`w-fit rounded-md px-3 py-2 text-sm font-bold ${getSettlementTone(
+            settlementStatus
+          )}`}
+        >
+          {getSettlementLabel(settlementStatus)}
+        </span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <SettlementMetric
+          label="Held amount"
+          value={formatCurrency(settlement.escrowAmount || fulfillment?.winningAmount || 0)}
+        />
+        <SettlementMetric
+          label="Platform fee"
+          value={formatCurrency(settlement.commissionAmount || 0)}
+        />
+        <SettlementMetric
+          label="Seller payout"
+          value={formatCurrency(settlement.sellerPayoutAmount || 0)}
+        />
+      </div>
+      <p className="rounded-md bg-indigo-50 p-3 text-sm leading-6 text-indigo-900">
+        PrimeBid releases escrow to the seller only after you confirm delivery, or
+        after admin resolves a dispute.
+      </p>
+    </section>
+  );
+};
+
+const SettlementMetric = ({ label, value }) => (
+  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+    <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+      {label}
+    </p>
+    <p className="mt-1 flex items-center gap-1.5 font-bold text-slate-950">
+      <IndianRupee className="h-4 w-4 text-slate-400" />
+      {value}
+    </p>
+  </div>
+);
+
+const ShipmentPanel = ({ fulfillment, onConfirmDelivery }) => {
+  const shipping = fulfillment?.shipping || {};
+  const timeline = fulfillment?.timeline || [];
+  const confirmEnabled = canConfirmDelivery(fulfillment);
+
+  return (
+    <section className="grid gap-4 rounded-md border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-2">
+          <Truck className="h-5 w-5 text-indigo-600" />
+          <h3 className="font-semibold text-slate-950">Shipment updates</h3>
+        </div>
+        {confirmEnabled && (
+          <button
+            type="button"
+            onClick={onConfirmDelivery}
+            className="inline-flex min-h-11 w-fit items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700"
+          >
+            <CheckCircle2 className="h-5 w-5" />
+            Confirm Received
+          </button>
+        )}
       </div>
       {shipping.trackingNumber ? (
         <div className="grid gap-1 rounded-md bg-slate-50 p-3 text-sm text-slate-700">

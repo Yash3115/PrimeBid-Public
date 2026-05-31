@@ -8,6 +8,8 @@ import { createNotification } from "../utils/notifications.js";
 import {
   DISPUTE_STATUS,
   FULFILLMENT_STATUS,
+  SETTLEMENT_ACTION,
+  SETTLEMENT_STATUS,
   buildTimelineEntry,
   normalizeAdminDisputeReview,
   normalizeDeliveryAddress,
@@ -15,6 +17,11 @@ import {
   normalizeDisputeResponse,
   sellerManagedStatuses,
 } from "../utils/fulfillment.js";
+import {
+  isActiveEscrowSettlement,
+  refundEscrowToBuyer,
+  releaseEscrowToSeller,
+} from "../utils/escrowSettlement.js";
 
 const fulfillmentPopulate = [
   { path: "auction", select: "title image currentBid endTime" },
@@ -22,6 +29,7 @@ const fulfillmentPopulate = [
   { path: "seller", select: "userName email phone reputation" },
   { path: "dispute.reportedBy", select: "userName email role" },
   { path: "dispute.adminReviewedBy", select: "userName email role" },
+  { path: "settlement.reviewedBy", select: "userName email role" },
 ];
 
 const assertObjectId = (id, label = "ID") => {
@@ -52,6 +60,7 @@ const findWinnerFulfillment = async (auctionId, userId) => {
     bidder: userId,
     seller: auction.createdBy,
     winningAmount: Number(auction.currentBid || 0),
+    settlementStatus: SETTLEMENT_STATUS.NEEDS_REVIEW,
     status: FULFILLMENT_STATUS.AWAITING_ADDRESS,
     timeline: [
       buildTimelineEntry({
@@ -216,6 +225,12 @@ export const updateShipmentStatus = asyncErrorHandler(async (req, res, next) => 
   fulfillment.shipping.sellerNote = String(sellerNote || "").trim().slice(0, 500);
   if (status === FULFILLMENT_STATUS.DELIVERED) {
     fulfillment.shipping.deliveredAt = new Date();
+    if (
+      isActiveEscrowSettlement(fulfillment.settlementStatus) &&
+      !fulfillment.dispute?.isOpen
+    ) {
+      fulfillment.settlementStatus = SETTLEMENT_STATUS.READY_TO_RELEASE;
+    }
   }
 
   const timelineCopy = {
@@ -229,7 +244,7 @@ export const updateShipmentStatus = asyncErrorHandler(async (req, res, next) => 
     },
     [FULFILLMENT_STATUS.DELIVERED]: {
       title: "Delivered",
-      message: "The seller marked the order as delivered.",
+      message: "The seller marked the order as delivered. Confirm receipt to release escrow.",
     },
     [FULFILLMENT_STATUS.ISSUE_REPORTED]: {
       title: "Issue reported",
@@ -268,6 +283,79 @@ export const updateShipmentStatus = asyncErrorHandler(async (req, res, next) => 
   });
 });
 
+export const confirmFulfillmentDelivery = asyncErrorHandler(async (req, res, next) => {
+  const { id } = req.params;
+  assertObjectId(id, "auction ID");
+
+  const fulfillment = await findWinnerFulfillment(id, req.user._id);
+  if (!fulfillment) {
+    const err = new Error("Fulfillment record not found for this won auction");
+    err.statusCode = 404;
+    return next(err);
+  }
+
+  if (fulfillment.dispute?.isOpen) {
+    const err = new Error("Resolve the open delivery issue before confirming receipt");
+    err.statusCode = 409;
+    return next(err);
+  }
+
+  if (fulfillment.status !== FULFILLMENT_STATUS.DELIVERED) {
+    const err = new Error("The seller must mark the item delivered before escrow can be released");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  fulfillment.settlement = {
+    ...(fulfillment.settlement?.toObject?.() || fulfillment.settlement || {}),
+    deliveryConfirmedAt: new Date(),
+  };
+
+  let message = "Delivery confirmed";
+  let escrowReleased = false;
+  if (isActiveEscrowSettlement(fulfillment.settlementStatus)) {
+    await releaseEscrowToSeller({
+      fulfillment,
+      actor: req.user._id,
+      actorRole: "Bidder",
+      note: "Buyer confirmed delivery and released escrow to the seller",
+    });
+    message = "Delivery confirmed and escrow released";
+    escrowReleased = true;
+  } else {
+    fulfillment.timeline.push(
+      buildTimelineEntry({
+        status: FULFILLMENT_STATUS.DELIVERED,
+        title: "Delivery confirmed",
+        message: "The buyer confirmed delivery.",
+        actor: req.user._id,
+        actorRole: "Bidder",
+      })
+    );
+    await fulfillment.save();
+  }
+
+  const auctionId = fulfillment.auction?._id || fulfillment.auction;
+  await createNotification({
+    user: fulfillment.seller?._id || fulfillment.seller,
+    auction: auctionId,
+    type: escrowReleased ? "wallet" : "fulfillment",
+    title: escrowReleased ? "Escrow released" : "Delivery confirmed",
+    message: escrowReleased
+      ? `${req.user.userName} confirmed delivery. Seller proceeds are now available for withdrawal.`
+      : `${req.user.userName} confirmed delivery.`,
+    actionPath: escrowReleased ? "/wallet" : "/seller-dashboard#fulfillment",
+  });
+
+  const populated = await populateFulfillment(fulfillment._id);
+
+  return res.status(200).json({
+    success: true,
+    message,
+    fulfillment: populated,
+  });
+});
+
 export const reportFulfillmentIssue = asyncErrorHandler(async (req, res, next) => {
   const { id } = req.params;
   assertObjectId(id, "auction ID");
@@ -292,6 +380,9 @@ export const reportFulfillmentIssue = asyncErrorHandler(async (req, res, next) =
       : fulfillment.status;
 
   fulfillment.status = FULFILLMENT_STATUS.ISSUE_REPORTED;
+  if (isActiveEscrowSettlement(fulfillment.settlementStatus)) {
+    fulfillment.settlementStatus = SETTLEMENT_STATUS.UNDER_DISPUTE;
+  }
   fulfillment.dispute = {
     ...(fulfillment.dispute?.toObject?.() || {}),
     ...report,
@@ -451,6 +542,36 @@ export const reviewFulfillmentDispute = asyncErrorHandler(async (req, res, next)
   }
 
   const review = normalizeAdminDisputeReview(req.body);
+  let settlementAction = review.settlementAction;
+  if (
+    review.isFinal &&
+    settlementAction === SETTLEMENT_ACTION.NONE &&
+    review.status === DISPUTE_STATUS.SELLER_FAVORED
+  ) {
+    settlementAction = SETTLEMENT_ACTION.RELEASE_TO_SELLER;
+  }
+  if (
+    review.isFinal &&
+    settlementAction === SETTLEMENT_ACTION.NONE &&
+    review.status === DISPUTE_STATUS.BUYER_FAVORED
+  ) {
+    settlementAction = SETTLEMENT_ACTION.REFUND_BUYER;
+  }
+  if (
+    review.isFinal &&
+    settlementAction === SETTLEMENT_ACTION.NONE &&
+    isActiveEscrowSettlement(fulfillment.settlementStatus)
+  ) {
+    const err = new Error("Choose whether to release escrow or refund the buyer");
+    err.statusCode = 400;
+    return next(err);
+  }
+  if (!review.isFinal && settlementAction !== SETTLEMENT_ACTION.NONE) {
+    const err = new Error("Settlement action requires a final dispute decision");
+    err.statusCode = 400;
+    return next(err);
+  }
+
   fulfillment.dispute = {
     ...(fulfillment.dispute?.toObject?.() || {}),
     status: review.status,
@@ -465,6 +586,9 @@ export const reviewFulfillmentDispute = asyncErrorHandler(async (req, res, next)
       fulfillment.dispute.previousFulfillmentStatus || FULFILLMENT_STATUS.AWAITING_ADDRESS;
   } else if (!review.isFinal) {
     fulfillment.status = FULFILLMENT_STATUS.ISSUE_REPORTED;
+    if (isActiveEscrowSettlement(fulfillment.settlementStatus)) {
+      fulfillment.settlementStatus = SETTLEMENT_STATUS.UNDER_DISPUTE;
+    }
   }
 
   const title = review.isFinal ? "Delivery dispute resolved" : "Delivery dispute reviewed";
@@ -483,7 +607,25 @@ export const reviewFulfillmentDispute = asyncErrorHandler(async (req, res, next)
       actorRole: "Super Admin",
     })
   );
-  await fulfillment.save();
+
+  let settlementResult = null;
+  if (settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER) {
+    settlementResult = await releaseEscrowToSeller({
+      fulfillment,
+      actor: req.user._id,
+      actorRole: "Super Admin",
+      note: review.adminResolution || "Admin released escrow to the seller",
+    });
+  } else if (settlementAction === SETTLEMENT_ACTION.REFUND_BUYER) {
+    settlementResult = await refundEscrowToBuyer({
+      fulfillment,
+      actor: req.user._id,
+      actorRole: "Super Admin",
+      note: review.adminResolution || "Admin refunded escrow to the buyer",
+    });
+  } else {
+    await fulfillment.save();
+  }
 
   await AuditLog.create({
     actor: req.user._id,
@@ -513,6 +655,27 @@ export const reviewFulfillmentDispute = asyncErrorHandler(async (req, res, next)
     }),
   ]);
 
+  if (settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER) {
+    await createNotification({
+      user: fulfillment.seller,
+      auction: auctionId,
+      type: "wallet",
+      title: "Escrow released",
+      message: "Admin resolved the dispute and released seller proceeds.",
+      actionPath: "/wallet",
+    });
+  }
+  if (settlementAction === SETTLEMENT_ACTION.REFUND_BUYER) {
+    await createNotification({
+      user: fulfillment.bidder,
+      auction: auctionId,
+      type: "wallet",
+      title: "Escrow refunded",
+      message: "Admin resolved the dispute and refunded the winning amount to your wallet.",
+      actionPath: "/wallet",
+    });
+  }
+
   if (review.status === DISPUTE_STATUS.SELLER_FAVORED) {
     await User.findByIdAndUpdate(fulfillment.bidder, {
       $inc: { "buyerStats.disputesLost": 1 },
@@ -528,6 +691,7 @@ export const reviewFulfillmentDispute = asyncErrorHandler(async (req, res, next)
     success: true,
     message: "Dispute review saved",
     fulfillment: await populateFulfillment(fulfillment._id),
+    settlement: settlementResult,
     disputes,
   });
 });

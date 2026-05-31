@@ -1,4 +1,9 @@
-import { FULFILLMENT_STATUS, getFulfillmentLabel } from "./fulfillment.js";
+import {
+  FULFILLMENT_STATUS,
+  SETTLEMENT_STATUS,
+  getFulfillmentLabel,
+  hasActiveEscrow,
+} from "./fulfillment.js";
 
 const toNumber = (value) => {
   const number = Number(value || 0);
@@ -16,6 +21,17 @@ export const getWinnerNextAction = (auction = {}) => {
       label: "Issue reported",
       detail: "Review the shipment notes and contact support if needed.",
       actionLabel: "Review issue",
+      to: "/won-auctions",
+      priority: "critical",
+    };
+  }
+
+  if (status === FULFILLMENT_STATUS.DELIVERED && hasActiveEscrow(fulfillment)) {
+    return {
+      id: `confirm-${auction._id}`,
+      label: "Confirm delivery",
+      detail: "Confirm receipt to release escrow to the seller.",
+      actionLabel: "Confirm received",
       to: "/won-auctions",
       priority: "critical",
     };
@@ -61,8 +77,14 @@ export const getWinnerNextAction = (auction = {}) => {
   if (status === FULFILLMENT_STATUS.DELIVERED) {
     return {
       id: `review-${auction._id}`,
-      label: "Leave seller feedback",
-      detail: "Close the loop by rating your seller experience.",
+      label:
+        fulfillment?.settlementStatus === SETTLEMENT_STATUS.REFUNDED_TO_BUYER
+          ? "Refund completed"
+          : "Leave seller feedback",
+      detail:
+        fulfillment?.settlementStatus === SETTLEMENT_STATUS.REFUNDED_TO_BUYER
+          ? "The disputed escrow was returned to your wallet."
+          : "Close the loop by rating your seller experience.",
       actionLabel: "Review seller",
       to: "/won-auctions",
       priority: "low",
@@ -166,6 +188,11 @@ export const buildSellerNextActions = ({
   const issueCount = statusCount(FULFILLMENT_STATUS.ISSUE_REPORTED);
   const readyToShipCount = statusCount(FULFILLMENT_STATUS.READY_TO_SHIP);
   const awaitingAddressCount = statusCount(FULFILLMENT_STATUS.AWAITING_ADDRESS);
+  const awaitingEscrowReleaseCount = fulfillmentQueue.filter(
+    (fulfillment) =>
+      fulfillment.status === FULFILLMENT_STATUS.DELIVERED &&
+      hasActiveEscrow(fulfillment)
+  ).length;
   const actions = [];
 
   if (issueCount > 0) {
@@ -189,6 +216,18 @@ export const buildSellerNextActions = ({
       actionLabel: "Update shipment",
       to: "#fulfillment",
       priority: "high",
+    });
+  }
+
+  if (awaitingEscrowReleaseCount > 0) {
+    actions.push({
+      id: "escrow-release",
+      label: "Awaiting escrow release",
+      count: awaitingEscrowReleaseCount,
+      detail: "Delivered orders are waiting for buyer confirmation or admin review.",
+      actionLabel: "View payouts",
+      to: "#fulfillment",
+      priority: "medium",
     });
   }
 

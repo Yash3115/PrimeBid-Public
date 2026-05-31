@@ -148,9 +148,13 @@ const Dashboard = () => {
     },
     {
       icon: Clock3,
-      label: "Locked Wallet Funds",
-      value: formatCurrency(overview?.wallet?.lockedBalance || 0),
-      detail: "Reserved for bids and payouts",
+      label: "Escrow Held",
+      value: formatCurrency(
+        Number(overview?.fulfillmentSettlement?.HeldInEscrow?.amount || 0) +
+          Number(overview?.fulfillmentSettlement?.ReadyToRelease?.amount || 0) +
+          Number(overview?.fulfillmentSettlement?.UnderDispute?.amount || 0)
+      ),
+      detail: "Captured funds awaiting release or refund",
     },
     {
       icon: PackageCheck,
@@ -325,6 +329,28 @@ const OperationsPulse = ({ overview, opsQueue }) => {
     ["Out for delivery", overview?.fulfillment?.OutForDelivery || 0],
     ["Open disputes", overview?.disputes?.open || overview?.fulfillment?.IssueReported || 0],
   ];
+  const escrowRows = [
+    [
+      "Held",
+      formatCurrency(overview?.fulfillmentSettlement?.HeldInEscrow?.amount || 0),
+    ],
+    [
+      "Ready",
+      formatCurrency(overview?.fulfillmentSettlement?.ReadyToRelease?.amount || 0),
+    ],
+    [
+      "Disputed",
+      formatCurrency(overview?.fulfillmentSettlement?.UnderDispute?.amount || 0),
+    ],
+    [
+      "Released",
+      formatCurrency(overview?.fulfillmentSettlement?.ReleasedToSeller?.amount || 0),
+    ],
+    [
+      "Refunded",
+      formatCurrency(overview?.fulfillmentSettlement?.RefundedToBuyer?.amount || 0),
+    ],
+  ];
 
   return (
     <section
@@ -384,6 +410,7 @@ const OperationsPulse = ({ overview, opsQueue }) => {
           <MiniOpsList title="Auction lifecycle" icon={Gavel} rows={auctionRows} />
           <MiniOpsList title="Wallet movement" icon={ShieldCheck} rows={financeRows} />
           <MiniOpsList title="Fulfillment" icon={PackageCheck} rows={fulfillmentRows} />
+          <MiniOpsList title="Escrow" icon={Wallet} rows={escrowRows} />
         </div>
       </div>
 

@@ -1,9 +1,13 @@
 /* eslint-disable react/prop-types */
 import {
   DISPUTE_STATUS,
+  SETTLEMENT_ACTION,
   getDisputeLabel,
   getDisputeTone,
   getIssueTypeLabel,
+  getSettlementLabel,
+  getSettlementTone,
+  settlementActionOptions,
 } from "@/lib/fulfillment";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
@@ -23,6 +27,16 @@ const reviewStatusOptions = [
   DISPUTE_STATUS.SELLER_FAVORED,
 ];
 
+const getDefaultSettlementAction = (status) => {
+  if (status === DISPUTE_STATUS.SELLER_FAVORED) {
+    return SETTLEMENT_ACTION.RELEASE_TO_SELLER;
+  }
+  if (status === DISPUTE_STATUS.BUYER_FAVORED) {
+    return SETTLEMENT_ACTION.REFUND_BUYER;
+  }
+  return SETTLEMENT_ACTION.NONE;
+};
+
 const DisputeManagement = () => {
   const dispatch = useDispatch();
   const { fulfillmentDisputes } = useSelector((state) => state.superAdmin);
@@ -39,8 +53,12 @@ const DisputeManagement = () => {
       [id]: {
         status: DISPUTE_STATUS.NEEDS_MORE_INFO,
         adminResolution: "",
+        settlementAction: SETTLEMENT_ACTION.NONE,
         ...(current[id] || {}),
         [field]: value,
+        ...(field === "status"
+          ? { settlementAction: getDefaultSettlementAction(value) }
+          : {}),
       },
     }));
   };
@@ -49,6 +67,7 @@ const DisputeManagement = () => {
     const review = reviews[fulfillmentId] || {
       status: DISPUTE_STATUS.NEEDS_MORE_INFO,
       adminResolution: "",
+      settlementAction: SETTLEMENT_ACTION.NONE,
     };
     const response = await dispatch(
       reviewFulfillmentDispute(fulfillmentId, review, statusFilter)
@@ -118,6 +137,9 @@ const DisputeCard = ({ fulfillment, review, updateReview, onReview }) => {
   const bidder = fulfillment.bidder || {};
   const seller = fulfillment.seller || {};
   const reviewStatus = review.status || DISPUTE_STATUS.NEEDS_MORE_INFO;
+  const settlement = fulfillment.settlement || {};
+  const settlementAction =
+    review.settlementAction || getDefaultSettlementAction(reviewStatus);
 
   return (
     <article className="grid gap-4 rounded-md border border-slate-200 p-4">
@@ -167,6 +189,28 @@ const DisputeCard = ({ fulfillment, review, updateReview, onReview }) => {
         />
       </div>
 
+      <div className="grid gap-3 rounded-md border border-indigo-100 bg-indigo-50 p-3 md:grid-cols-[1fr_auto] md:items-center">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-indigo-700">
+            Escrow settlement
+          </p>
+          <p className="mt-1 text-sm leading-6 text-indigo-900">
+            {formatCurrency(settlement.escrowAmount || fulfillment.winningAmount || 0)} held,
+            {" "}
+            {formatCurrency(settlement.sellerPayoutAmount || 0)} seller payout,
+            {" "}
+            {formatCurrency(settlement.commissionAmount || 0)} platform fee.
+          </p>
+        </div>
+        <span
+          className={`w-fit rounded-md px-3 py-2 text-sm font-bold ${getSettlementTone(
+            fulfillment.settlementStatus
+          )}`}
+        >
+          {getSettlementLabel(fulfillment.settlementStatus)}
+        </span>
+      </div>
+
       <div className="grid gap-3 rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-700">
         <p className="font-semibold text-slate-950">
           {getIssueTypeLabel(dispute.issueType)}
@@ -187,7 +231,7 @@ const DisputeCard = ({ fulfillment, review, updateReview, onReview }) => {
       </div>
 
       {dispute.isOpen && (
-        <div className="grid gap-3 md:grid-cols-[220px_1fr_auto]">
+        <div className="grid gap-3 lg:grid-cols-[190px_190px_1fr_auto]">
           <label className="grid gap-1">
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
               Decision
@@ -202,6 +246,24 @@ const DisputeCard = ({ fulfillment, review, updateReview, onReview }) => {
               {reviewStatusOptions.map((status) => (
                 <option key={status} value={status}>
                   {getDisputeLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="grid gap-1">
+            <span className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Money action
+            </span>
+            <select
+              value={settlementAction}
+              onChange={(event) =>
+                updateReview(fulfillment._id, "settlementAction", event.target.value)
+              }
+              className="rounded-md border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            >
+              {settlementActionOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>

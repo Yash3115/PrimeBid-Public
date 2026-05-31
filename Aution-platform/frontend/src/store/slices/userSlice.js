@@ -386,6 +386,23 @@ export const reportFulfillmentIssue = (id, data) => async (dispatch) => {
   }
 };
 
+export const confirmFulfillmentDelivery = (id) => async (dispatch) => {
+  try {
+    const response = await api.put(`/user/won-auctions/${id}/confirm-delivery`);
+    dispatch(
+      userSlice.actions.wonAuctionFulfillmentSuccess(
+        response.data.fulfillment
+      )
+    );
+    toast.success(response.data.message);
+    dispatch(fetchNotifications());
+    return response.data;
+  } catch (error) {
+    toastApiError(error);
+    return { success: false };
+  }
+};
+
 export const fetchNotifications = () => async (dispatch) => {
   try {
     const response = await api.get("/user/notifications");

@@ -4,7 +4,8 @@ export const transactionLabels = {
   TOP_UP: "Top up",
   BID_LOCK: "Bid locked",
   BID_RELEASE: "Bid released",
-  BID_CAPTURED: "Winning bid captured",
+  BID_CAPTURED: "Escrow captured",
+  ESCROW_REFUND: "Escrow refunded",
   SALE_CREDIT: "Sale credited",
   COMMISSION_DEBIT: "Commission retained",
   COMMISSION_RETAINED: "Commission retained",
@@ -24,6 +25,7 @@ export const walletTransactionFilters = [
 const creditTransactionTypes = new Set([
   "TOP_UP",
   "BID_RELEASE",
+  "ESCROW_REFUND",
   "SALE_CREDIT",
   "WITHDRAWAL_REJECTED",
 ]);
@@ -32,6 +34,7 @@ const lockTransactionTypes = new Set(["BID_LOCK", "WITHDRAWAL_REQUEST"]);
 
 const settlementTransactionTypes = new Set([
   "BID_CAPTURED",
+  "ESCROW_REFUND",
   "SALE_CREDIT",
   "COMMISSION_DEBIT",
   "COMMISSION_RETAINED",
@@ -43,7 +46,13 @@ const withdrawalTransactionTypes = new Set([
   "WITHDRAWAL_REJECTED",
 ]);
 
-const moneyInTypes = new Set(["TOP_UP", "BID_RELEASE", "SALE_CREDIT", "WITHDRAWAL_REJECTED"]);
+const moneyInTypes = new Set([
+  "TOP_UP",
+  "BID_RELEASE",
+  "ESCROW_REFUND",
+  "SALE_CREDIT",
+  "WITHDRAWAL_REJECTED",
+]);
 const reserveTypes = new Set(["BID_LOCK", "WITHDRAWAL_REQUEST"]);
 const moneyOutTypes = new Set(["BID_CAPTURED", "WITHDRAWAL_APPROVED"]);
 

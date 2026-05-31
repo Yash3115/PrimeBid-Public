@@ -280,6 +280,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         totalBids,
         withdrawalAmountRows,
         fulfillmentRows,
+        fulfillmentSettlementRows,
         openDisputeCount,
         platformAccount,
         recentPlatformTransactions,
@@ -322,6 +323,15 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         Fulfillment.aggregate([
             { $group: { _id: "$status", count: { $sum: 1 } } },
         ]),
+        Fulfillment.aggregate([
+            {
+                $group: {
+                    _id: "$settlementStatus",
+                    count: { $sum: 1 },
+                    amount: { $sum: "$settlement.escrowAmount" },
+                },
+            },
+        ]),
         Fulfillment.countDocuments({ "dispute.isOpen": true }),
         getOrCreatePlatformAccount(),
         PlatformTransaction.find().sort({ createdAt: -1 }).limit(5).lean(),
@@ -338,6 +348,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
     const kyc = countRowsById(kycRows);
     const withdrawalsByStatus = sumRowsById(withdrawalAmountRows);
     const fulfillment = countRowsById(fulfillmentRows);
+    const fulfillmentSettlement = sumRowsById(fulfillmentSettlementRows);
     const walletTotals = buildWalletTotals(walletRows);
     const auctionRuntime = buildAuctionRuntimeSummary(auctions, now);
     const activeNoBidAuctions = auctions.filter((auction) => {
@@ -379,6 +390,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
                 byStatus: withdrawalsByStatus,
             },
             fulfillment,
+            fulfillmentSettlement,
             disputes: {
                 open: openDisputeCount,
             },

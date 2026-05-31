@@ -14,6 +14,7 @@ const walletTransactionSchema = new mongoose.Schema(
                 "BID_LOCK",
                 "BID_RELEASE",
                 "BID_CAPTURED",
+                "ESCROW_REFUND",
                 "SALE_CREDIT",
                 "COMMISSION_DEBIT",
                 "COMMISSION_RETAINED",

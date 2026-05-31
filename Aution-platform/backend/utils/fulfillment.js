@@ -9,6 +9,28 @@ export const FULFILLMENT_STATUS = {
   ISSUE_REPORTED: "IssueReported",
 };
 
+export const SETTLEMENT_STATUS = {
+  WALLET_CAPTURED: "WalletCaptured",
+  NEEDS_REVIEW: "NeedsReview",
+  HELD_IN_ESCROW: "HeldInEscrow",
+  READY_TO_RELEASE: "ReadyToRelease",
+  RELEASED_TO_SELLER: "ReleasedToSeller",
+  REFUNDED_TO_BUYER: "RefundedToBuyer",
+  UNDER_DISPUTE: "UnderDispute",
+};
+
+export const SETTLEMENT_ACTION = {
+  NONE: "None",
+  RELEASE_TO_SELLER: "ReleaseToSeller",
+  REFUND_BUYER: "RefundBuyer",
+};
+
+export const activeEscrowSettlementStatuses = [
+  SETTLEMENT_STATUS.HELD_IN_ESCROW,
+  SETTLEMENT_STATUS.READY_TO_RELEASE,
+  SETTLEMENT_STATUS.UNDER_DISPUTE,
+];
+
 export const sellerManagedStatuses = [
   FULFILLMENT_STATUS.SHIPPED,
   FULFILLMENT_STATUS.OUT_FOR_DELIVERY,
@@ -126,6 +148,10 @@ export const normalizeDisputeResponse = (input = {}) => {
 export const normalizeAdminDisputeReview = (input = {}) => {
   const status = cleanString(input.status, 60);
   const adminResolution = cleanString(input.adminResolution, 1000);
+  const settlementAction = cleanString(
+    input.settlementAction || SETTLEMENT_ACTION.NONE,
+    60
+  );
 
   if (!Object.values(DISPUTE_STATUS).includes(status)) {
     const err = new Error("Please choose a valid dispute review status");
@@ -135,6 +161,12 @@ export const normalizeAdminDisputeReview = (input = {}) => {
 
   if (DISPUTE_FINAL_STATUSES.includes(status) && adminResolution.length < 10) {
     const err = new Error("Final dispute decisions require a resolution note");
+      err.statusCode = 400;
+      throw err;
+  }
+
+  if (!Object.values(SETTLEMENT_ACTION).includes(settlementAction)) {
+    const err = new Error("Please choose a valid settlement action");
     err.statusCode = 400;
     throw err;
   }
@@ -142,6 +174,7 @@ export const normalizeAdminDisputeReview = (input = {}) => {
   return {
     status,
     adminResolution,
+    settlementAction,
     isFinal: DISPUTE_FINAL_STATUSES.includes(status),
   };
 };
@@ -183,7 +216,8 @@ export const ensureFulfillmentForAuction = async ({
   bidderId,
   sellerId,
   winningAmount,
-  settlementStatus = "WalletCaptured",
+  settlementStatus = SETTLEMENT_STATUS.HELD_IN_ESCROW,
+  settlement = {},
 }) => {
   const existing = await Fulfillment.findOne({ auction: auction._id });
   if (existing) {
@@ -198,6 +232,7 @@ export const ensureFulfillmentForAuction = async ({
       winningBid: bid?._id,
       winningAmount: Number(winningAmount || bid?.amount || auction.currentBid || 0),
       settlementStatus,
+      settlement,
       status: FULFILLMENT_STATUS.AWAITING_ADDRESS,
       timeline: [
         buildTimelineEntry({
