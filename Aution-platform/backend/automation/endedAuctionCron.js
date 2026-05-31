@@ -18,6 +18,7 @@ import {
   captureWinningBidFunds,
   releaseAuctionBidLocks,
 } from "../utils/wallet.js";
+import { runWithOptionalTransaction } from "../utils/mongoTransaction.js";
 
 export const runEndedAuctionTasks = async () => {
   const now = new Date();
@@ -77,45 +78,53 @@ export const runEndedAuctionTasks = async () => {
       }
       if (highestBidder) {
         auction.highestBidder = highestBidder.bidder.id;
-        await releaseAuctionBidLocks({
-          auction,
-          exceptUserId: highestBidder.bidder.id,
-          note: "Non-winning bid lock released after auction close",
-        });
+        let settlement;
+        let fulfillmentCreated = false;
+        await runWithOptionalTransaction(async ({ session }) => {
+          await releaseAuctionBidLocks({
+            auction,
+            exceptUserId: highestBidder.bidder.id,
+            note: "Non-winning bid lock released after auction close",
+            session,
+          });
 
-        const settlement = await captureWinningBidFunds({
-          bidderId: highestBidder.bidder.id,
-          sellerId: auctioneer._id,
-          auctionId: auction._id,
-          bidId: highestBidder._id,
-          grossAmount: highestBidder.amount,
-          commissionAmount,
-        });
+          settlement = await captureWinningBidFunds({
+            bidderId: highestBidder.bidder.id,
+            sellerId: auctioneer._id,
+            auctionId: auction._id,
+            bidId: highestBidder._id,
+            grossAmount: highestBidder.amount,
+            commissionAmount,
+            session,
+          });
 
-        const winningBidEntry = auction.bids.find(
-          (bid) =>
-            bid.userId?.toString() === highestBidder.bidder.id?.toString()
-        );
-        if (winningBidEntry && settlement.settled) {
-          winningBidEntry.lockedAmount = 0;
-        }
-        await auction.save();
+          const winningBidEntry = auction.bids.find(
+            (bid) =>
+              bid.userId?.toString() === highestBidder.bidder.id?.toString()
+          );
+          if (winningBidEntry && settlement.settled) {
+            winningBidEntry.lockedAmount = 0;
+          }
+          await auction.save({ session });
 
-        const { created: fulfillmentCreated } = await ensureFulfillmentForAuction({
-          auction,
-          bid: highestBidder,
-          bidderId: highestBidder.bidder.id,
-          sellerId: auctioneer._id,
-          winningAmount: highestBidder.amount,
-          settlementStatus: settlement.settled
-            ? SETTLEMENT_STATUS.HELD_IN_ESCROW
-            : SETTLEMENT_STATUS.NEEDS_REVIEW,
-          settlement: settlement.settled
-            ? buildEscrowSettlement({
-                grossAmount: settlement.grossAmount,
-                commissionAmount: settlement.commissionAmount,
-              })
-            : {},
+          const fulfillmentResult = await ensureFulfillmentForAuction({
+            auction,
+            bid: highestBidder,
+            bidderId: highestBidder.bidder.id,
+            sellerId: auctioneer._id,
+            winningAmount: highestBidder.amount,
+            settlementStatus: settlement.settled
+              ? SETTLEMENT_STATUS.HELD_IN_ESCROW
+              : SETTLEMENT_STATUS.NEEDS_REVIEW,
+            settlement: settlement.settled
+              ? buildEscrowSettlement({
+                  grossAmount: settlement.grossAmount,
+                  commissionAmount: settlement.commissionAmount,
+                })
+              : {},
+            session,
+          });
+          fulfillmentCreated = fulfillmentResult.created;
         });
 
         const bidder = await User.findById(highestBidder.bidder.id);

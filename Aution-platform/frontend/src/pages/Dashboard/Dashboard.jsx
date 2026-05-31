@@ -305,6 +305,8 @@ const priorityTone = {
 };
 
 const OperationsPulse = ({ overview, opsQueue }) => {
+  const reconciliation = overview?.reconciliation;
+  const reconciliationWarnings = reconciliation?.warnings || [];
   const auctionRows = [
     ["Live", overview?.auctions?.live || 0],
     ["Upcoming", overview?.auctions?.upcoming || 0],
@@ -349,6 +351,28 @@ const OperationsPulse = ({ overview, opsQueue }) => {
     [
       "Refunded",
       formatCurrency(overview?.fulfillmentSettlement?.RefundedToBuyer?.amount || 0),
+    ],
+  ];
+  const reconciliationRows = [
+    [
+      "Wallet locks",
+      reconciliation?.walletLocked?.status || "Pending",
+    ],
+    [
+      "Recorded locked",
+      formatCurrency(reconciliation?.walletLocked?.recorded || 0),
+    ],
+    [
+      "Expected locked",
+      formatCurrency(reconciliation?.walletLocked?.expected || 0),
+    ],
+    [
+      "Active escrow",
+      formatCurrency(reconciliation?.escrow?.activeAmount || 0),
+    ],
+    [
+      "Platform ledger",
+      reconciliation?.platformAvailable?.status || "Pending",
     ],
   ];
 
@@ -411,10 +435,27 @@ const OperationsPulse = ({ overview, opsQueue }) => {
           <MiniOpsList title="Wallet movement" icon={ShieldCheck} rows={financeRows} />
           <MiniOpsList title="Fulfillment" icon={PackageCheck} rows={fulfillmentRows} />
           <MiniOpsList title="Escrow" icon={Wallet} rows={escrowRows} />
+          <MiniOpsList title="Reconciliation" icon={ShieldCheck} rows={reconciliationRows} />
         </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        {reconciliationWarnings.length > 0 && (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <p className="flex items-center gap-2 font-bold">
+              <AlertTriangle className="h-4 w-4" />
+              Wallet reconciliation needs review
+            </p>
+            <div className="mt-2 grid gap-2">
+              {reconciliationWarnings.slice(0, 3).map((warning) => (
+                <p key={warning.key} className="text-xs leading-5">
+                  {warning.message} Recorded {formatCurrency(warning.recorded)}
+                  , expected {formatCurrency(warning.expected)}.
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
         <h3 className="flex items-center gap-2 text-lg font-bold text-slate-950">
           <BarChart3 className="h-5 w-5 text-indigo-600" />
           Recent platform credits

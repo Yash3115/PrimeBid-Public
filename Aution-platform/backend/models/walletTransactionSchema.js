@@ -66,6 +66,10 @@ const walletTransactionSchema = new mongoose.Schema(
             type: String,
             enum: ["UPI", "Credit Card", "Debit Card", "Bank Transfer", "Manual", "Wallet"],
         },
+        idempotencyKey: {
+            type: String,
+            trim: true,
+        },
         reference: String,
         note: String,
     },
@@ -73,8 +77,47 @@ const walletTransactionSchema = new mongoose.Schema(
 );
 
 walletTransactionSchema.index({ user: 1, createdAt: -1 });
-walletTransactionSchema.index({ auction: 1, type: 1 });
+walletTransactionSchema.index({ auction: 1, type: 1, createdAt: -1 });
 walletTransactionSchema.index({ withdrawal: 1 });
+walletTransactionSchema.index(
+    { user: 1, type: 1, idempotencyKey: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            idempotencyKey: { $type: "string" },
+        },
+    }
+);
+walletTransactionSchema.index(
+    { auction: 1, type: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            auction: { $exists: true },
+            type: "BID_CAPTURED",
+        },
+    }
+);
+walletTransactionSchema.index(
+    { user: 1, auction: 1, type: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            auction: { $exists: true },
+            type: { $in: ["SALE_CREDIT", "ESCROW_REFUND", "COMMISSION_RETAINED"] },
+        },
+    }
+);
+walletTransactionSchema.index(
+    { withdrawal: 1, type: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            withdrawal: { $exists: true },
+            type: { $in: ["WITHDRAWAL_APPROVED", "WITHDRAWAL_REJECTED"] },
+        },
+    }
+);
 
 const WalletTransaction = mongoose.model(
     "WalletTransaction",

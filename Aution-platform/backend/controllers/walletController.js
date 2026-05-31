@@ -16,9 +16,12 @@ import {
 import { buildWalletLockBreakdown } from "../utils/walletBreakdown.js";
 import {
     WALLET_PAYMENT_METHODS,
+    buildWalletTransactionLookup,
+    findWalletTransaction,
     getWalletSnapshot,
     recordWalletTransaction,
 } from "../utils/wallet.js";
+import { applySession, createOne, runWithOptionalTransaction } from "../utils/mongoTransaction.js";
 
 const MAX_WALLET_AMOUNT = 10000000;
 
@@ -45,6 +48,16 @@ const parseWalletAmount = (value, label = "Amount") => {
 
 const cleanText = (value, maxLength = 120) =>
     String(value || "").trim().slice(0, maxLength);
+
+const getIdempotencyKey = (req, prefix) => {
+    const rawKey =
+        req.get?.("Idempotency-Key") ||
+        req.body?.idempotencyKey ||
+        req.body?.requestId ||
+        "";
+    const key = cleanText(rawKey, 120);
+    return key ? `${prefix}:${key}` : "";
+};
 
 const buildBidLockDetails = async (userId) => {
     const bidLocks = await Bid.find({
@@ -136,6 +149,7 @@ const topUpWallet = asyncErrorHandler(async (req, res, next) => {
     const amount = parseWalletAmount(req.body.amount, "Top-up amount");
     const paymentMethod = cleanText(req.body.paymentMethod || req.body.method);
     const reference = cleanText(req.body.reference, 160);
+    const idempotencyKey = getIdempotencyKey(req, "wallet-top-up");
 
     if (!WALLET_PAYMENT_METHODS.includes(paymentMethod)) {
         const err = new Error("Please choose UPI, Credit Card, or Debit Card");
@@ -143,33 +157,50 @@ const topUpWallet = asyncErrorHandler(async (req, res, next) => {
         return next(err);
     }
 
-    const beforeUser = await User.findById(req.user._id);
-    if (!beforeUser) {
-        const err = new Error("User not found");
-        err.statusCode = 404;
-        return next(err);
-    }
-    const before = getWalletSnapshot(beforeUser);
-    const updatedUser = await User.findByIdAndUpdate(
-        req.user._id,
-        {
-            $inc: {
-                "wallet.availableBalance": amount,
-                "wallet.lifetimeDeposited": amount,
-            },
-        },
-        { new: true }
-    );
+    let transaction;
+    await runWithOptionalTransaction(async ({ session }) => {
+        if (idempotencyKey) {
+            transaction = await findWalletTransaction(
+                buildWalletTransactionLookup({
+                    user: req.user._id,
+                    type: "TOP_UP",
+                    idempotencyKey,
+                }),
+                session
+            );
+            if (transaction) return;
+        }
 
-    const transaction = await recordWalletTransaction({
-        user: req.user._id,
-        type: "TOP_UP",
-        amount,
-        before,
-        after: getWalletSnapshot(updatedUser),
-        paymentMethod,
-        reference,
-        note: "Demo wallet top-up credited immediately",
+        const beforeUser = await applySession(User.findById(req.user._id), session);
+        if (!beforeUser) {
+            const err = new Error("User not found");
+            err.statusCode = 404;
+            throw err;
+        }
+        const before = getWalletSnapshot(beforeUser);
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user._id,
+            {
+                $inc: {
+                    "wallet.availableBalance": amount,
+                    "wallet.lifetimeDeposited": amount,
+                },
+            },
+            { new: true, session }
+        );
+
+        transaction = await recordWalletTransaction({
+            user: req.user._id,
+            type: "TOP_UP",
+            amount,
+            before,
+            after: getWalletSnapshot(updatedUser),
+            paymentMethod,
+            idempotencyKey,
+            reference,
+            note: "Demo wallet top-up credited immediately",
+            session,
+        });
     });
     const payload = await buildWalletPayload(req.user._id);
 
@@ -183,6 +214,7 @@ const topUpWallet = asyncErrorHandler(async (req, res, next) => {
 
 const requestWithdrawal = asyncErrorHandler(async (req, res, next) => {
     const amount = parseWalletAmount(req.body.amount, "Withdrawal amount");
+    const idempotencyKey = getIdempotencyKey(req, "wallet-withdrawal");
     const user = await User.findById(req.user._id);
     if (!user) {
         const err = new Error("User not found");
@@ -208,35 +240,57 @@ const requestWithdrawal = asyncErrorHandler(async (req, res, next) => {
         return next(err);
     }
 
-    const before = getWalletSnapshot(user);
-    const updatedUser = await User.findOneAndUpdate(
-        {
-            _id: user._id,
-            "wallet.availableBalance": { $gte: amount },
-        },
-        {
-            $inc: {
-                "wallet.availableBalance": -amount,
-                "wallet.lockedBalance": amount,
+    let withdrawal;
+    let transaction;
+    await runWithOptionalTransaction(async ({ session }) => {
+        if (idempotencyKey) {
+            withdrawal = await applySession(
+                WithdrawalRequest.findOne({ user: user._id, idempotencyKey }),
+                session
+            );
+            if (withdrawal) {
+                transaction = await applySession(
+                    WalletTransaction.findOne({
+                        user: user._id,
+                        withdrawal: withdrawal._id,
+                        type: "WITHDRAWAL_REQUEST",
+                    }),
+                    session
+                );
+                return;
+            }
+        }
+
+        const beforeUser = await applySession(User.findById(user._id), session);
+        const before = getWalletSnapshot(beforeUser);
+        const updatedUser = await User.findOneAndUpdate(
+            {
+                _id: user._id,
+                "wallet.availableBalance": { $gte: amount },
             },
-        },
-        { new: true }
-    );
+            {
+                $inc: {
+                    "wallet.availableBalance": -amount,
+                    "wallet.lockedBalance": amount,
+                },
+            },
+            { new: true, session }
+        );
 
-    if (!updatedUser) {
-        const err = new Error("Insufficient available wallet balance for withdrawal");
-        err.statusCode = 400;
-        return next(err);
-    }
+        if (!updatedUser) {
+            const err = new Error("Insufficient available wallet balance for withdrawal");
+            err.statusCode = 400;
+            throw err;
+        }
 
-    try {
-        const withdrawal = await WithdrawalRequest.create({
+        withdrawal = await createOne(WithdrawalRequest, {
             user: user._id,
             amount,
             bankDetailsSnapshot: bankValidation.details,
-        });
+            ...(idempotencyKey ? { idempotencyKey } : {}),
+        }, session);
 
-        const transaction = await recordWalletTransaction({
+        transaction = await recordWalletTransaction({
             user: user._id,
             type: "WITHDRAWAL_REQUEST",
             amount,
@@ -245,8 +299,11 @@ const requestWithdrawal = asyncErrorHandler(async (req, res, next) => {
             status: "Pending",
             withdrawal: withdrawal._id,
             paymentMethod: "Bank Transfer",
+            idempotencyKey,
             note: "Withdrawal requested and reserved from available balance",
+            session,
         });
+    });
 
         const payload = await buildWalletPayload(user._id);
         return res.status(201).json({
@@ -256,15 +313,6 @@ const requestWithdrawal = asyncErrorHandler(async (req, res, next) => {
             transaction,
             ...payload,
         });
-    } catch (error) {
-        await User.findByIdAndUpdate(user._id, {
-            $inc: {
-                "wallet.availableBalance": amount,
-                "wallet.lockedBalance": -amount,
-            },
-        });
-        throw error;
-    }
 });
 
 const getMyWithdrawals = asyncErrorHandler(async (req, res) => {
@@ -311,83 +359,89 @@ const reviewWithdrawalRequest = asyncErrorHandler(async (req, res, next) => {
         return next(err);
     }
 
-    const withdrawal = await WithdrawalRequest.findById(id);
-    if (!withdrawal) {
-        const err = new Error("Withdrawal request not found");
-        err.statusCode = 404;
-        return next(err);
-    }
-    if (withdrawal.status !== "Pending") {
-        const err = new Error("Only pending withdrawal requests can be reviewed");
-        err.statusCode = 400;
-        return next(err);
-    }
+    let withdrawal;
+    let user;
+    let transaction;
+    await runWithOptionalTransaction(async ({ session }) => {
+        withdrawal = await applySession(WithdrawalRequest.findById(id), session);
+        if (!withdrawal) {
+            const err = new Error("Withdrawal request not found");
+            err.statusCode = 404;
+            throw err;
+        }
+        if (withdrawal.status !== "Pending") {
+            const err = new Error("Only pending withdrawal requests can be reviewed");
+            err.statusCode = 400;
+            throw err;
+        }
 
-    const user = await User.findById(withdrawal.user);
-    if (!user) {
-        const err = new Error("Withdrawal user not found");
-        err.statusCode = 404;
-        return next(err);
-    }
+        user = await applySession(User.findById(withdrawal.user), session);
+        if (!user) {
+            const err = new Error("Withdrawal user not found");
+            err.statusCode = 404;
+            throw err;
+        }
 
-    const amount = Number(withdrawal.amount || 0);
-    const before = getWalletSnapshot(user);
-    const update =
-        status === "Approved"
-            ? {
-                  $inc: {
-                      "wallet.lockedBalance": -amount,
-                      "wallet.lifetimeWithdrawn": amount,
-                  },
-              }
-            : {
-                  $inc: {
-                      "wallet.availableBalance": amount,
-                      "wallet.lockedBalance": -amount,
-                  },
-              };
-
-    const updatedUser = await User.findOneAndUpdate(
-        {
-            _id: user._id,
-            "wallet.lockedBalance": { $gte: amount },
-        },
-        update,
-        { new: true }
-    );
-
-    if (!updatedUser) {
-        const err = new Error("Reserved withdrawal funds are unavailable");
-        err.statusCode = 409;
-        return next(err);
-    }
-
-    withdrawal.status = status;
-    withdrawal.adminComment = adminComment;
-    withdrawal.reviewedBy = req.user._id;
-    withdrawal.reviewedAt = new Date();
-    await withdrawal.save();
-
-    const transaction = await recordWalletTransaction({
-        user: user._id,
-        type: status === "Approved" ? "WITHDRAWAL_APPROVED" : "WITHDRAWAL_REJECTED",
-        amount,
-        before,
-        after: getWalletSnapshot(updatedUser),
-        withdrawal: withdrawal._id,
-        paymentMethod: "Bank Transfer",
-        note:
+        const amount = Number(withdrawal.amount || 0);
+        const before = getWalletSnapshot(user);
+        const update =
             status === "Approved"
-                ? "Withdrawal approved by admin"
-                : "Withdrawal rejected and funds returned",
-    });
+                ? {
+                      $inc: {
+                          "wallet.lockedBalance": -amount,
+                          "wallet.lifetimeWithdrawn": amount,
+                      },
+                  }
+                : {
+                      $inc: {
+                          "wallet.availableBalance": amount,
+                          "wallet.lockedBalance": -amount,
+                      },
+                  };
 
-    await AuditLog.create({
-        actor: req.user._id,
-        action: "WITHDRAWAL_REVIEWED",
-        targetType: "WithdrawalRequest",
-        targetId: withdrawal._id,
-        summary: `${status} withdrawal for ${user.email}`,
+        const updatedUser = await User.findOneAndUpdate(
+            {
+                _id: user._id,
+                "wallet.lockedBalance": { $gte: amount },
+            },
+            update,
+            { new: true, session }
+        );
+
+        if (!updatedUser) {
+            const err = new Error("Reserved withdrawal funds are unavailable");
+            err.statusCode = 409;
+            throw err;
+        }
+
+        withdrawal.status = status;
+        withdrawal.adminComment = adminComment;
+        withdrawal.reviewedBy = req.user._id;
+        withdrawal.reviewedAt = new Date();
+        await withdrawal.save({ session });
+
+        transaction = await recordWalletTransaction({
+            user: user._id,
+            type: status === "Approved" ? "WITHDRAWAL_APPROVED" : "WITHDRAWAL_REJECTED",
+            amount,
+            before,
+            after: getWalletSnapshot(updatedUser),
+            withdrawal: withdrawal._id,
+            paymentMethod: "Bank Transfer",
+            note:
+                status === "Approved"
+                    ? "Withdrawal approved by admin"
+                    : "Withdrawal rejected and funds returned",
+            session,
+        });
+
+        await createOne(AuditLog, {
+            actor: req.user._id,
+            action: "WITHDRAWAL_REVIEWED",
+            targetType: "WithdrawalRequest",
+            targetId: withdrawal._id,
+            summary: `${status} withdrawal for ${user.email}`,
+        }, session);
     });
     await createNotification({
         user: user._id,

@@ -1,5 +1,6 @@
 import PlatformAccount from "../models/platformAccountSchema.js";
 import PlatformTransaction from "../models/platformTransactionSchema.js";
+import { applySession, createOne } from "./mongoTransaction.js";
 
 const PLATFORM_ACCOUNT_KEY = "primary";
 
@@ -10,11 +11,11 @@ export const getPlatformSnapshot = (account) => ({
     lifetimeWithdrawn: Number(account?.lifetimeWithdrawn || 0),
 });
 
-export const getOrCreatePlatformAccount = async () =>
+export const getOrCreatePlatformAccount = async (session) =>
     PlatformAccount.findOneAndUpdate(
         { key: PLATFORM_ACCOUNT_KEY },
         { $setOnInsert: { key: PLATFORM_ACCOUNT_KEY } },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
+        { new: true, upsert: true, setDefaultsOnInsert: true, session }
     );
 
 const buildCommissionLookup = ({ auctionId, bidId, paymentProofId, manual }) => {
@@ -33,11 +34,17 @@ const buildCommissionLookup = ({ auctionId, bidId, paymentProofId, manual }) => 
     return null;
 };
 
-const findExistingCommissionCredit = async (settlementKey) => {
+const findExistingCommissionCredit = async (settlementKey, session) => {
     if (!settlementKey) return null;
-    const transaction = await PlatformTransaction.findOne(settlementKey);
+    const transaction = await applySession(
+        PlatformTransaction.findOne(settlementKey),
+        session
+    );
     if (!transaction) return null;
-    const account = await PlatformAccount.findById(transaction.platformAccount);
+    const account = await applySession(
+        PlatformAccount.findById(transaction.platformAccount),
+        session
+    );
 
     return {
         account,
@@ -63,6 +70,7 @@ export const creditPlatformCommission = async ({
     manual = false,
     reference,
     note,
+    session,
 }) => {
     const commissionAmount = Number(amount || 0);
     if (!Number.isFinite(commissionAmount) || commissionAmount <= 0) {
@@ -75,12 +83,12 @@ export const creditPlatformCommission = async ({
         paymentProofId,
         manual,
     });
-    const existingSettlement = await findExistingCommissionCredit(settlementKey);
+    const existingSettlement = await findExistingCommissionCredit(settlementKey, session);
     if (existingSettlement) {
         return existingSettlement;
     }
 
-    const beforeAccount = await getOrCreatePlatformAccount();
+    const beforeAccount = await getOrCreatePlatformAccount(session);
     const before = getPlatformSnapshot(beforeAccount);
     const updatedAccount = await PlatformAccount.findByIdAndUpdate(
         beforeAccount._id,
@@ -91,12 +99,12 @@ export const creditPlatformCommission = async ({
                 lifetimeManualCommission: manual ? commissionAmount : 0,
             },
         },
-        { new: true }
+        { new: true, session }
     );
 
     let transaction;
     try {
-        transaction = await PlatformTransaction.create({
+        transaction = await createOne(PlatformTransaction, {
             platformAccount: updatedAccount._id,
             type: manual ? "MANUAL_COMMISSION_CREDIT" : "COMMISSION_CREDIT",
             amount: commissionAmount,
@@ -109,7 +117,7 @@ export const creditPlatformCommission = async ({
             paymentProof: paymentProofId,
             reference,
             note: note || "Platform commission credited",
-        });
+        }, session);
     } catch (error) {
         await PlatformAccount.findByIdAndUpdate(updatedAccount._id, {
             $inc: {
@@ -117,9 +125,12 @@ export const creditPlatformCommission = async ({
                 lifetimeCommission: -commissionAmount,
                 lifetimeManualCommission: manual ? -commissionAmount : 0,
             },
-        });
+        }, { session });
         if (error?.code === 11000) {
-            const duplicateSettlement = await findExistingCommissionCredit(settlementKey);
+            const duplicateSettlement = await findExistingCommissionCredit(
+                settlementKey,
+                session
+            );
             if (duplicateSettlement) return duplicateSettlement;
         }
         throw error;

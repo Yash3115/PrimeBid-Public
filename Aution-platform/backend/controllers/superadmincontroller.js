@@ -24,6 +24,7 @@ import {
     getOrCreatePlatformAccount,
     getPlatformSnapshot,
 } from "../utils/platformAccount.js";
+import { buildWalletReconciliation } from "../utils/walletReconciliation.js";
 
 const escapeRegex = (value) =>
     String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -283,6 +284,8 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         fulfillmentSettlementRows,
         openDisputeCount,
         platformAccount,
+        bidLockRows,
+        platformTransactionAmountRows,
         recentPlatformTransactions,
         recentAuctions,
     ] = await Promise.all([
@@ -334,6 +337,26 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         ]),
         Fulfillment.countDocuments({ "dispute.isOpen": true }),
         getOrCreatePlatformAccount(),
+        Bid.aggregate([
+            { $match: { lockedAmount: { $gt: 0 } } },
+            {
+                $group: {
+                    _id: null,
+                    count: { $sum: 1 },
+                    amount: { $sum: "$lockedAmount" },
+                },
+            },
+        ]),
+        PlatformTransaction.aggregate([
+            { $match: { status: "Completed" } },
+            {
+                $group: {
+                    _id: "$type",
+                    count: { $sum: 1 },
+                    amount: { $sum: "$amount" },
+                },
+            },
+        ]),
         PlatformTransaction.find().sort({ createdAt: -1 }).limit(5).lean(),
         Auction.find()
             .select("title image currentBid status startTime endTime createdBy updatedAt")
@@ -349,7 +372,28 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
     const withdrawalsByStatus = sumRowsById(withdrawalAmountRows);
     const fulfillment = countRowsById(fulfillmentRows);
     const fulfillmentSettlement = sumRowsById(fulfillmentSettlementRows);
+    const platformLedger = sumRowsById(platformTransactionAmountRows);
     const walletTotals = buildWalletTotals(walletRows);
+    const platformSnapshot = getPlatformSnapshot(platformAccount);
+    const activeEscrowTotal =
+        Number(fulfillmentSettlement.HeldInEscrow?.amount || 0) +
+        Number(fulfillmentSettlement.ReadyToRelease?.amount || 0) +
+        Number(fulfillmentSettlement.UnderDispute?.amount || 0);
+    const platformCommissionLedger =
+        Number(platformLedger.COMMISSION_CREDIT?.amount || 0) +
+        Number(platformLedger.MANUAL_COMMISSION_CREDIT?.amount || 0);
+    const platformLedgerBalance =
+        platformCommissionLedger -
+        Number(platformLedger.PLATFORM_WITHDRAWAL?.amount || 0);
+    const reconciliation = buildWalletReconciliation({
+        walletTotals,
+        bidLockTotal: bidLockRows[0]?.amount || 0,
+        pendingWithdrawalTotal: withdrawalsByStatus.Pending?.amount || 0,
+        activeEscrowTotal,
+        platformSnapshot,
+        platformLedgerBalance,
+        platformCommissionLedger,
+    });
     const auctionRuntime = buildAuctionRuntimeSummary(auctions, now);
     const activeNoBidAuctions = auctions.filter((auction) => {
         if (auction.status === "Draft" || (auction.bids || []).length > 0) {
@@ -368,6 +412,7 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
         readyToShip: fulfillment.ReadyToShip,
         issueReported: openDisputeCount || fulfillment.IssueReported,
         atRiskAuctions: activeNoBidAuctions,
+        reconciliationWarnings: reconciliation.warnings.length,
     });
 
     return res.status(200).json({
@@ -394,7 +439,8 @@ const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
             disputes: {
                 open: openDisputeCount,
             },
-            platform: getPlatformSnapshot(platformAccount),
+            platform: platformSnapshot,
+            reconciliation,
             actionQueue,
             recentPlatformTransactions,
             recentAuctions,

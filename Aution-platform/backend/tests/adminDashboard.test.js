@@ -66,6 +66,18 @@ test("builds admin action queue with only active work", () => {
   assert.equal(queue[0].priority, "critical");
 });
 
+test("wallet reconciliation warnings lead the admin action queue", () => {
+  const queue = buildAdminActionQueue({
+    reconciliationWarnings: 2,
+    pendingWithdrawals: 1,
+  });
+
+  assert.deepEqual(
+    queue.map((item) => item.id),
+    ["wallet-reconciliation", "withdrawals"]
+  );
+});
+
 test("normalizes admin aggregate rows", () => {
   assert.deepEqual(countRowsById([{ _id: "Bidder", count: 3 }]), {
     Bidder: 3,

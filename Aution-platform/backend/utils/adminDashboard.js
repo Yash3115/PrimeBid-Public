@@ -65,8 +65,17 @@ export const buildAdminActionQueue = ({
     readyToShip = 0,
     issueReported = 0,
     atRiskAuctions = 0,
+    reconciliationWarnings = 0,
 } = {}) => {
     const queue = [
+        {
+            id: "wallet-reconciliation",
+            label: "Wallet mismatches",
+            count: toNumber(reconciliationWarnings),
+            detail: "Recorded balances differ from ledger expectations",
+            href: "#operations",
+            priority: "critical",
+        },
         {
             id: "withdrawals",
             label: "Withdrawal reviews",

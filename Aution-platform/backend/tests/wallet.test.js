@@ -7,11 +7,15 @@ import {
   normalizeCommissionAmount,
 } from "../utils/wallet.js";
 import WalletTransaction from "../models/walletTransactionSchema.js";
+import WithdrawalRequest from "../models/withdrawalRequestSchema.js";
 import {
   buildEscrowSettlement,
   isActiveEscrowSettlement,
+  refundEscrowToBuyer,
+  releaseEscrowToSeller,
 } from "../utils/escrowSettlement.js";
 import { SETTLEMENT_STATUS } from "../utils/fulfillment.js";
+import { buildWalletReconciliation } from "../utils/walletReconciliation.js";
 
 test("builds a zero wallet snapshot for legacy users without wallet fields", () => {
   const snapshot = getWalletSnapshot({});
@@ -108,4 +112,70 @@ test("wallet transactions include escrow refund activity", () => {
   assert.ok(typeEnum.includes("BID_CAPTURED"));
   assert.ok(typeEnum.includes("ESCROW_REFUND"));
   assert.ok(typeEnum.includes("SALE_CREDIT"));
+});
+
+test("wallet ledger models expose idempotency indexes", () => {
+  const walletIndexes = WalletTransaction.schema.indexes();
+  const withdrawalIndexes = WithdrawalRequest.schema.indexes();
+
+  assert.ok(
+    walletIndexes.some(
+      ([fields, options]) =>
+        fields.user === 1 &&
+        fields.type === 1 &&
+        fields.idempotencyKey === 1 &&
+        options?.unique === true
+    )
+  );
+  assert.ok(
+    walletIndexes.some(
+      ([fields, options]) =>
+        fields.auction === 1 &&
+        fields.type === 1 &&
+        options?.unique === true
+    )
+  );
+  assert.ok(
+    withdrawalIndexes.some(
+      ([fields, options]) =>
+        fields.user === 1 &&
+        fields.idempotencyKey === 1 &&
+        options?.unique === true
+    )
+  );
+});
+
+test("settled escrow cannot be resolved in the opposite direction", async () => {
+  await assert.rejects(
+    () =>
+      refundEscrowToBuyer({
+        fulfillment: { settlementStatus: SETTLEMENT_STATUS.RELEASED_TO_SELLER },
+      }),
+    /already released/
+  );
+  await assert.rejects(
+    () =>
+      releaseEscrowToSeller({
+        fulfillment: { settlementStatus: SETTLEMENT_STATUS.REFUNDED_TO_BUYER },
+      }),
+    /already refunded/
+  );
+});
+
+test("wallet reconciliation flags locked balance mismatches", () => {
+  const reconciliation = buildWalletReconciliation({
+    walletTotals: { lockedBalance: 1500 },
+    bidLockTotal: 800,
+    pendingWithdrawalTotal: 500,
+    activeEscrowTotal: 1200,
+    platformSnapshot: { availableBalance: 300, lifetimeCommission: 300 },
+    platformLedgerBalance: 300,
+    platformCommissionLedger: 300,
+  });
+
+  assert.equal(reconciliation.healthy, false);
+  assert.equal(reconciliation.walletLocked.expected, 1300);
+  assert.equal(reconciliation.walletLocked.difference, 200);
+  assert.equal(reconciliation.escrow.activeAmount, 1200);
+  assert.equal(reconciliation.warnings.length, 1);
 });

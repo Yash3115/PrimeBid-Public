@@ -54,6 +54,14 @@ const emptyWithdrawalBankDetails = {
 const bankAccountPattern = /^[A-Z0-9]{6,24}$/i;
 const ifscPattern = /^[A-Z]{4}0[A-Z0-9]{6}$/i;
 
+const createClientRequestKey = (prefix) => {
+  const randomPart =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${randomPart}`;
+};
+
 const normalizeWithdrawalBankDetails = (details = {}) => ({
   bankName: String(details.bankName || "").trim(),
   bankAccountName: String(details.bankAccountName || "").trim(),
@@ -353,6 +361,7 @@ const Wallet = () => {
         amount: topUpAmount,
         paymentMethod,
         reference: cleanNote ? `${demoReference} | ${cleanNote}` : demoReference,
+        idempotencyKey: createClientRequestKey("top-up"),
       })
     );
     setIsProcessingPayment(false);
@@ -385,6 +394,7 @@ const Wallet = () => {
       requestWalletWithdrawal({
         amount: withdrawalAmount,
         ...withdrawalBankSnapshot,
+        idempotencyKey: createClientRequestKey("withdrawal"),
       })
     );
     if (result?.success) {

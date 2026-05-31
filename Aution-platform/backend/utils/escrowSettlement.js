@@ -7,10 +7,13 @@ import {
 } from "./fulfillment.js";
 import { creditPlatformCommission } from "./platformAccount.js";
 import {
+  buildWalletTransactionLookup,
+  findWalletTransaction,
   getWalletSnapshot,
   normalizeCommissionAmount,
   recordWalletTransaction,
 } from "./wallet.js";
+import { applySession } from "./mongoTransaction.js";
 
 const roundMoney = (value) => {
   const number = Number(value || 0);
@@ -58,17 +61,27 @@ const getSettlementAmounts = (fulfillment) => {
   };
 };
 
-const assertReleasableEscrow = (fulfillment) => {
+const assertReleasableEscrow = (fulfillment, desiredAction) => {
   if (!fulfillment) {
     const err = new Error("Fulfillment record not found");
     err.statusCode = 404;
     throw err;
   }
   if (fulfillment.settlementStatus === SETTLEMENT_STATUS.RELEASED_TO_SELLER) {
-    return { alreadySettled: true, action: "released" };
+    if (desiredAction === "release") {
+      return { alreadySettled: true, action: "released" };
+    }
+    const err = new Error("Escrow was already released to the seller");
+    err.statusCode = 409;
+    throw err;
   }
   if (fulfillment.settlementStatus === SETTLEMENT_STATUS.REFUNDED_TO_BUYER) {
-    return { alreadySettled: true, action: "refunded" };
+    if (desiredAction === "refund") {
+      return { alreadySettled: true, action: "refunded" };
+    }
+    const err = new Error("Escrow was already refunded to the buyer");
+    err.statusCode = 409;
+    throw err;
   }
   if (!isActiveEscrowSettlement(fulfillment.settlementStatus)) {
     const err = new Error("Escrow is not available for this fulfillment");
@@ -83,26 +96,28 @@ export const releaseEscrowToSeller = async ({
   actor,
   actorRole = "System",
   note = "Escrow released to seller",
+  session,
 }) => {
-  const guard = assertReleasableEscrow(fulfillment);
+  const workingFulfillment = fulfillment;
+  const guard = assertReleasableEscrow(workingFulfillment, "release");
   if (guard.alreadySettled) {
-    return { success: true, alreadySettled: true, fulfillment };
+    return { success: true, alreadySettled: true, fulfillment: workingFulfillment };
   }
 
-  const amounts = getSettlementAmounts(fulfillment);
+  const amounts = getSettlementAmounts(workingFulfillment);
   if (amounts.escrowAmount <= 0) {
     const err = new Error("Escrow amount is invalid");
     err.statusCode = 409;
     throw err;
   }
 
-  const auctionId = fulfillment.auction?._id || fulfillment.auction;
-  const bidId = fulfillment.winningBid?._id || fulfillment.winningBid;
-  const sellerId = fulfillment.seller?._id || fulfillment.seller;
-  const bidderId = fulfillment.bidder?._id || fulfillment.bidder;
+  const auctionId = workingFulfillment.auction?._id || workingFulfillment.auction;
+  const bidId = workingFulfillment.winningBid?._id || workingFulfillment.winningBid;
+  const sellerId = workingFulfillment.seller?._id || workingFulfillment.seller;
+  const bidderId = workingFulfillment.bidder?._id || workingFulfillment.bidder;
   const [sellerBeforeUser, bidder] = await Promise.all([
-    User.findById(sellerId),
-    User.findById(bidderId),
+    applySession(User.findById(sellerId), session),
+    applySession(User.findById(bidderId), session),
   ]);
   if (!sellerBeforeUser) {
     const err = new Error("Seller account not found");
@@ -120,32 +135,42 @@ export const releaseEscrowToSeller = async ({
       bidderId,
       auctioneerId: sellerId,
       note: "Platform commission credited when escrow was released",
+      session,
     });
   }
 
   let sellerAfterUser = sellerBeforeUser;
   if (amounts.sellerPayoutAmount > 0) {
-    const sellerBefore = getWalletSnapshot(sellerBeforeUser);
-    sellerAfterUser = await User.findByIdAndUpdate(
-      sellerId,
-      {
-        $inc: {
-          "wallet.availableBalance": amounts.sellerPayoutAmount,
-        },
-      },
-      { new: true }
-    );
-
-    await recordWalletTransaction({
+    const saleCreditLookup = buildWalletTransactionLookup({
       user: sellerId,
       type: "SALE_CREDIT",
-      amount: amounts.sellerPayoutAmount,
-      before: sellerBefore,
-      after: getWalletSnapshot(sellerAfterUser),
       auction: auctionId,
-      bid: bidId,
-      note: "Escrow released after delivery confirmation or admin decision",
     });
+    const existingSaleCredit = await findWalletTransaction(saleCreditLookup, session);
+    const sellerBefore = getWalletSnapshot(sellerBeforeUser);
+    if (!existingSaleCredit) {
+      sellerAfterUser = await User.findByIdAndUpdate(
+        sellerId,
+        {
+          $inc: {
+            "wallet.availableBalance": amounts.sellerPayoutAmount,
+          },
+        },
+        { new: true, session }
+      );
+
+      await recordWalletTransaction({
+        user: sellerId,
+        type: "SALE_CREDIT",
+        amount: amounts.sellerPayoutAmount,
+        before: sellerBefore,
+        after: getWalletSnapshot(sellerAfterUser),
+        auction: auctionId,
+        bid: bidId,
+        note: "Escrow released after delivery confirmation or admin decision",
+        session,
+      });
+    }
   }
 
   if (amounts.commissionAmount > 0) {
@@ -166,7 +191,7 @@ export const releaseEscrowToSeller = async ({
         collectionMethod: "WalletSettlement",
         status: "Collected",
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, new: true, setDefaultsOnInsert: true, session }
     );
 
     await recordWalletTransaction({
@@ -178,12 +203,13 @@ export const releaseEscrowToSeller = async ({
       auction: auctionId,
       bid: bidId,
       note: "Platform commission transferred when escrow was released",
+      session,
     });
   }
 
-  fulfillment.settlementStatus = SETTLEMENT_STATUS.RELEASED_TO_SELLER;
-  fulfillment.settlement = {
-    ...(fulfillment.settlement?.toObject?.() || fulfillment.settlement || {}),
+  workingFulfillment.settlementStatus = SETTLEMENT_STATUS.RELEASED_TO_SELLER;
+  workingFulfillment.settlement = {
+    ...(workingFulfillment.settlement?.toObject?.() || workingFulfillment.settlement || {}),
     ...amounts,
     releasedAt: new Date(),
     reviewedBy: actor,
@@ -191,16 +217,16 @@ export const releaseEscrowToSeller = async ({
     commission: commissionRecord?._id,
     note,
   };
-  fulfillment.timeline.push(
+  workingFulfillment.timeline.push(
     buildTimelineEntry({
-      status: fulfillment.status,
+      status: workingFulfillment.status,
       title: "Escrow released",
       message: note,
       actor,
       actorRole,
     })
   );
-  await fulfillment.save();
+  await workingFulfillment.save({ session });
 
   if (bidder) {
     await User.findByIdAndUpdate(bidder._id, {
@@ -210,7 +236,7 @@ export const releaseEscrowToSeller = async ({
 
   return {
     success: true,
-    fulfillment,
+    fulfillment: workingFulfillment,
     amounts,
     platformSettlement,
   };
@@ -221,73 +247,85 @@ export const refundEscrowToBuyer = async ({
   actor,
   actorRole = "System",
   note = "Escrow refunded to buyer",
+  session,
 }) => {
-  const guard = assertReleasableEscrow(fulfillment);
+  const workingFulfillment = fulfillment;
+  const guard = assertReleasableEscrow(workingFulfillment, "refund");
   if (guard.alreadySettled) {
-    return { success: true, alreadySettled: true, fulfillment };
+    return { success: true, alreadySettled: true, fulfillment: workingFulfillment };
   }
 
-  const amounts = getSettlementAmounts(fulfillment);
+  const amounts = getSettlementAmounts(workingFulfillment);
   if (amounts.escrowAmount <= 0) {
     const err = new Error("Escrow amount is invalid");
     err.statusCode = 409;
     throw err;
   }
 
-  const auctionId = fulfillment.auction?._id || fulfillment.auction;
-  const bidId = fulfillment.winningBid?._id || fulfillment.winningBid;
-  const bidderId = fulfillment.bidder?._id || fulfillment.bidder;
-  const buyerBeforeUser = await User.findById(bidderId);
+  const auctionId = workingFulfillment.auction?._id || workingFulfillment.auction;
+  const bidId = workingFulfillment.winningBid?._id || workingFulfillment.winningBid;
+  const bidderId = workingFulfillment.bidder?._id || workingFulfillment.bidder;
+  const buyerBeforeUser = await applySession(User.findById(bidderId), session);
   if (!buyerBeforeUser) {
     const err = new Error("Buyer account not found");
     err.statusCode = 404;
     throw err;
   }
 
-  const before = getWalletSnapshot(buyerBeforeUser);
-  const buyerAfterUser = await User.findByIdAndUpdate(
-    bidderId,
-    {
-      $inc: {
-        "wallet.availableBalance": amounts.escrowAmount,
-      },
-    },
-    { new: true }
-  );
-
-  await recordWalletTransaction({
+  const refundLookup = buildWalletTransactionLookup({
     user: bidderId,
     type: "ESCROW_REFUND",
-    amount: amounts.escrowAmount,
-    before,
-    after: getWalletSnapshot(buyerAfterUser),
     auction: auctionId,
-    bid: bidId,
-    note,
   });
+  const existingRefund = await findWalletTransaction(refundLookup, session);
+  const before = getWalletSnapshot(buyerBeforeUser);
+  let buyerAfterUser = buyerBeforeUser;
+  if (!existingRefund) {
+    buyerAfterUser = await User.findByIdAndUpdate(
+      bidderId,
+      {
+        $inc: {
+          "wallet.availableBalance": amounts.escrowAmount,
+        },
+      },
+      { new: true, session }
+    );
 
-  fulfillment.settlementStatus = SETTLEMENT_STATUS.REFUNDED_TO_BUYER;
-  fulfillment.settlement = {
-    ...(fulfillment.settlement?.toObject?.() || fulfillment.settlement || {}),
+    await recordWalletTransaction({
+      user: bidderId,
+      type: "ESCROW_REFUND",
+      amount: amounts.escrowAmount,
+      before,
+      after: getWalletSnapshot(buyerAfterUser),
+      auction: auctionId,
+      bid: bidId,
+      note,
+      session,
+    });
+  }
+
+  workingFulfillment.settlementStatus = SETTLEMENT_STATUS.REFUNDED_TO_BUYER;
+  workingFulfillment.settlement = {
+    ...(workingFulfillment.settlement?.toObject?.() || workingFulfillment.settlement || {}),
     ...amounts,
     refundedAt: new Date(),
     reviewedBy: actor,
     note,
   };
-  fulfillment.timeline.push(
+  workingFulfillment.timeline.push(
     buildTimelineEntry({
-      status: fulfillment.status,
+      status: workingFulfillment.status,
       title: "Escrow refunded",
       message: note,
       actor,
       actorRole,
     })
   );
-  await fulfillment.save();
+  await workingFulfillment.save({ session });
 
   return {
     success: true,
-    fulfillment,
+    fulfillment: workingFulfillment,
     amounts,
   };
 };

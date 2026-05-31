@@ -1,4 +1,5 @@
 import Fulfillment from "../models/fulfillmentSchema.js";
+import { applySession, createOne } from "./mongoTransaction.js";
 
 export const FULFILLMENT_STATUS = {
   AWAITING_ADDRESS: "AwaitingAddress",
@@ -218,14 +219,18 @@ export const ensureFulfillmentForAuction = async ({
   winningAmount,
   settlementStatus = SETTLEMENT_STATUS.HELD_IN_ESCROW,
   settlement = {},
+  session,
 }) => {
-  const existing = await Fulfillment.findOne({ auction: auction._id });
+  const existing = await applySession(
+    Fulfillment.findOne({ auction: auction._id }),
+    session
+  );
   if (existing) {
     return { fulfillment: existing, created: false };
   }
 
   try {
-    const fulfillment = await Fulfillment.create({
+    const fulfillment = await createOne(Fulfillment, {
       auction: auction._id,
       bidder: bidderId,
       seller: sellerId,
@@ -241,12 +246,15 @@ export const ensureFulfillmentForAuction = async ({
           message: "The auction has closed. The winner needs to add delivery details before the seller can ship.",
         }),
       ],
-    });
+    }, session);
 
     return { fulfillment, created: true };
   } catch (error) {
     if (error?.code === 11000) {
-      const fulfillment = await Fulfillment.findOne({ auction: auction._id });
+      const fulfillment = await applySession(
+        Fulfillment.findOne({ auction: auction._id }),
+        session
+      );
       if (fulfillment) return { fulfillment, created: false };
     }
     throw error;

@@ -22,6 +22,7 @@ import {
   refundEscrowToBuyer,
   releaseEscrowToSeller,
 } from "../utils/escrowSettlement.js";
+import { runWithOptionalTransaction } from "../utils/mongoTransaction.js";
 
 const fulfillmentPopulate = [
   { path: "auction", select: "title image currentBid endTime" },
@@ -306,6 +307,18 @@ export const confirmFulfillmentDelivery = asyncErrorHandler(async (req, res, nex
     return next(err);
   }
 
+  if (
+    fulfillment.settlementStatus === SETTLEMENT_STATUS.RELEASED_TO_SELLER &&
+    fulfillment.settlement?.deliveryConfirmedAt
+  ) {
+    const populated = await populateFulfillment(fulfillment._id);
+    return res.status(200).json({
+      success: true,
+      message: "Delivery was already confirmed",
+      fulfillment: populated,
+    });
+  }
+
   fulfillment.settlement = {
     ...(fulfillment.settlement?.toObject?.() || fulfillment.settlement || {}),
     deliveryConfirmedAt: new Date(),
@@ -314,11 +327,14 @@ export const confirmFulfillmentDelivery = asyncErrorHandler(async (req, res, nex
   let message = "Delivery confirmed";
   let escrowReleased = false;
   if (isActiveEscrowSettlement(fulfillment.settlementStatus)) {
-    await releaseEscrowToSeller({
-      fulfillment,
-      actor: req.user._id,
-      actorRole: "Bidder",
-      note: "Buyer confirmed delivery and released escrow to the seller",
+    await runWithOptionalTransaction(async ({ session }) => {
+      await releaseEscrowToSeller({
+        fulfillment,
+        actor: req.user._id,
+        actorRole: "Bidder",
+        note: "Buyer confirmed delivery and released escrow to the seller",
+        session,
+      });
     });
     message = "Delivery confirmed and escrow released";
     escrowReleased = true;
@@ -332,7 +348,9 @@ export const confirmFulfillmentDelivery = asyncErrorHandler(async (req, res, nex
         actorRole: "Bidder",
       })
     );
-    await fulfillment.save();
+    await runWithOptionalTransaction(async ({ session }) => {
+      await fulfillment.save({ session });
+    });
   }
 
   const auctionId = fulfillment.auction?._id || fulfillment.auction;
@@ -609,23 +627,27 @@ export const reviewFulfillmentDispute = asyncErrorHandler(async (req, res, next)
   );
 
   let settlementResult = null;
-  if (settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER) {
-    settlementResult = await releaseEscrowToSeller({
-      fulfillment,
-      actor: req.user._id,
-      actorRole: "Super Admin",
-      note: review.adminResolution || "Admin released escrow to the seller",
-    });
-  } else if (settlementAction === SETTLEMENT_ACTION.REFUND_BUYER) {
-    settlementResult = await refundEscrowToBuyer({
-      fulfillment,
-      actor: req.user._id,
-      actorRole: "Super Admin",
-      note: review.adminResolution || "Admin refunded escrow to the buyer",
-    });
-  } else {
-    await fulfillment.save();
-  }
+  await runWithOptionalTransaction(async ({ session }) => {
+    if (settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER) {
+      settlementResult = await releaseEscrowToSeller({
+        fulfillment,
+        actor: req.user._id,
+        actorRole: "Super Admin",
+        note: review.adminResolution || "Admin released escrow to the seller",
+        session,
+      });
+    } else if (settlementAction === SETTLEMENT_ACTION.REFUND_BUYER) {
+      settlementResult = await refundEscrowToBuyer({
+        fulfillment,
+        actor: req.user._id,
+        actorRole: "Super Admin",
+        note: review.adminResolution || "Admin refunded escrow to the buyer",
+        session,
+      });
+    } else {
+      await fulfillment.save({ session });
+    }
+  });
 
   await AuditLog.create({
     actor: req.user._id,

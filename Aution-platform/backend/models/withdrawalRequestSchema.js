@@ -29,12 +29,25 @@ const withdrawalRequestSchema = new mongoose.Schema(
             ref: "User",
         },
         reviewedAt: Date,
+        idempotencyKey: {
+            type: String,
+            trim: true,
+        },
     },
     { timestamps: true }
 );
 
 withdrawalRequestSchema.index({ user: 1, createdAt: -1 });
 withdrawalRequestSchema.index({ status: 1, createdAt: -1 });
+withdrawalRequestSchema.index(
+    { user: 1, idempotencyKey: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            idempotencyKey: { $type: "string" },
+        },
+    }
+);
 
 const WithdrawalRequest = mongoose.model(
     "WithdrawalRequest",
@@ -42,4 +55,3 @@ const WithdrawalRequest = mongoose.model(
 );
 
 export default WithdrawalRequest;
-
