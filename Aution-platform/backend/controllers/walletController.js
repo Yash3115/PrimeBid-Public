@@ -99,7 +99,11 @@ const buildWithdrawalLockDetails = (withdrawals = []) =>
 const buildWalletPayload = async (userId) => {
     const user = await User.findById(userId).select("-password");
     const [transactions, withdrawals, bidLocks] = await Promise.all([
-        WalletTransaction.find({ user: userId }).sort({ createdAt: -1 }).limit(40),
+        WalletTransaction.find({ user: userId })
+            .populate("auction", "title image currentBid endTime")
+            .populate("withdrawal", "status bankDetailsSnapshot reviewedAt")
+            .sort({ createdAt: -1 })
+            .limit(40),
         WithdrawalRequest.find({ user: userId }).sort({ createdAt: -1 }).limit(20),
         buildBidLockDetails(userId),
     ]);

@@ -10,6 +10,13 @@ import {
 } from "@/lib/demoPayments";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
+  buildWalletStatementCsv,
+  filterWalletTransactions,
+  getWalletTransactionMeta,
+  summarizeWalletTransactions,
+  walletTransactionFilters,
+} from "@/lib/walletInsights";
+import {
   fetchWallet,
   requestWalletWithdrawal,
   topUpWallet,
@@ -21,6 +28,7 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+  Download,
   ExternalLink,
   Gavel,
   IndianRupee,
@@ -35,44 +43,6 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-
-const transactionLabels = {
-  TOP_UP: "Top up",
-  BID_LOCK: "Bid locked",
-  BID_RELEASE: "Bid released",
-  BID_CAPTURED: "Winning bid captured",
-  SALE_CREDIT: "Sale credited",
-  COMMISSION_DEBIT: "Commission retained",
-  COMMISSION_RETAINED: "Commission retained",
-  WITHDRAWAL_REQUEST: "Withdrawal requested",
-  WITHDRAWAL_APPROVED: "Withdrawal approved",
-  WITHDRAWAL_REJECTED: "Withdrawal rejected",
-};
-
-const transactionFilters = [
-  { id: "all", label: "All" },
-  { id: "credits", label: "Credits" },
-  { id: "locks", label: "Locks" },
-  { id: "withdrawals", label: "Withdrawals" },
-];
-
-const creditTransactionTypes = new Set([
-  "TOP_UP",
-  "BID_RELEASE",
-  "SALE_CREDIT",
-  "WITHDRAWAL_REJECTED",
-]);
-const lockTransactionTypes = new Set([
-  "BID_LOCK",
-  "BID_CAPTURED",
-  "COMMISSION_DEBIT",
-  "COMMISSION_RETAINED",
-]);
-const withdrawalTransactionTypes = new Set([
-  "WITHDRAWAL_REQUEST",
-  "WITHDRAWAL_APPROVED",
-  "WITHDRAWAL_REJECTED",
-]);
 
 const emptyWithdrawalBankDetails = {
   bankName: "",
@@ -120,13 +90,6 @@ const validateWithdrawalBankDetails = (details = {}) => {
     normalized,
     valid: Object.keys(errors).length === 0,
   };
-};
-
-const getTransactionTone = (type) => {
-  if (creditTransactionTypes.has(type)) return "text-emerald-700";
-  if (withdrawalTransactionTypes.has(type)) return "text-amber-700";
-  if (lockTransactionTypes.has(type)) return "text-indigo-700";
-  return "text-slate-700";
 };
 
 const Wallet = () => {
@@ -334,21 +297,31 @@ const Wallet = () => {
     [bidLocks.length, lockBreakdown, unmatchedLockedAmount, withdrawalLocks.length]
   );
 
-  const filteredTransactions = useMemo(() => {
-    if (transactionFilter === "all") return transactions;
-    return transactions.filter((transaction) => {
-      if (transactionFilter === "credits") {
-        return creditTransactionTypes.has(transaction.type);
-      }
-      if (transactionFilter === "locks") {
-        return lockTransactionTypes.has(transaction.type);
-      }
-      if (transactionFilter === "withdrawals") {
-        return withdrawalTransactionTypes.has(transaction.type);
-      }
-      return true;
-    });
-  }, [transactionFilter, transactions]);
+  const transactionSummary = useMemo(
+    () => summarizeWalletTransactions(transactions),
+    [transactions]
+  );
+  const filteredTransactions = useMemo(
+    () => filterWalletTransactions(transactions, transactionFilter),
+    [transactionFilter, transactions]
+  );
+
+  const handleExportStatement = () => {
+    if (typeof window === "undefined" || transactions.length === 0) return;
+
+    const csv = buildWalletStatementCsv(transactions);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `primebid-wallet-statement-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
   const handleTopUp = async (event) => {
     event.preventDefault();
@@ -1150,13 +1123,66 @@ const Wallet = () => {
                 </section>
 
                 <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-950">
+                        <ReceiptText className="h-5 w-5 text-indigo-600" />
+                        Money Trail
+                      </h2>
+                      <p className="mt-2 text-sm text-slate-500">
+                        See how recent deposits, bid holds, settlements, and
+                        withdrawals moved your available and locked balances.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExportStatement}
+                      disabled={transactions.length === 0}
+                      className="inline-flex min-h-11 w-fit items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-800 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Download className="h-4 w-4" />
+                      Export CSV
+                    </button>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <MoneyTrailStat
+                      label="Money in"
+                      value={formatCurrency(transactionSummary.moneyIn)}
+                      detail="Top-ups, sale credits, and returned holds"
+                      tone="emerald"
+                    />
+                    <MoneyTrailStat
+                      label="Reserved"
+                      value={formatCurrency(transactionSummary.reserved)}
+                      detail="Bid locks and withdrawal requests"
+                      tone="indigo"
+                    />
+                    <MoneyTrailStat
+                      label="Released"
+                      value={formatCurrency(transactionSummary.released)}
+                      detail="Funds returned from bids or rejected payouts"
+                      tone="sky"
+                    />
+                    <MoneyTrailStat
+                      label="Settled out"
+                      value={formatCurrency(transactionSummary.settled)}
+                      detail={`${transactionSummary.withdrawalEvents} withdrawal event${
+                        transactionSummary.withdrawalEvents === 1 ? "" : "s"
+                      }`}
+                      tone="violet"
+                    />
+                  </div>
+                </section>
+
+                <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h2 className="flex items-center gap-2 text-xl font-semibold text-slate-950">
                       <ReceiptText className="h-5 w-5 text-indigo-600" />
                       Recent Transactions
                     </h2>
                     <div className="flex flex-wrap gap-2">
-                      {transactionFilters.map((filter) => (
+                      {walletTransactionFilters.map((filter) => (
                         <button
                           key={filter.id}
                           type="button"
@@ -1187,39 +1213,51 @@ const Wallet = () => {
                       </thead>
                       <tbody className="text-slate-700">
                         {filteredTransactions.length > 0 ? (
-                          filteredTransactions.map((transaction) => (
-                            <tr
-                              key={transaction._id}
-                              className="border-t border-slate-200"
-                            >
-                              <td className="px-4 py-3">
-                                <p className="font-semibold text-slate-950">
-                                  {transactionLabels[transaction.type] ||
-                                    transaction.type}
-                                </p>
-                                {(transaction.note || transaction.reference) && (
-                                  <p className="mt-1 max-w-[320px] truncate text-xs text-slate-500">
-                                    {transaction.note || transaction.reference}
-                                  </p>
-                                )}
-                              </td>
-                              <td
-                                className={`px-4 py-3 font-bold ${getTransactionTone(
-                                  transaction.type
-                                )}`}
+                          filteredTransactions.map((transaction) => {
+                            const meta = getWalletTransactionMeta(transaction);
+                            return (
+                              <tr
+                                key={transaction._id}
+                                className="border-t border-slate-200"
                               >
-                                {formatCurrency(transaction.amount)}
-                              </td>
-                              <td className="px-4 py-3">
-                                <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                                  {transaction.status}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                {formatDateTime(transaction.createdAt)}
-                              </td>
-                            </tr>
-                          ))
+                                <td className="px-4 py-3">
+                                  <p className="font-semibold text-slate-950">
+                                    {meta.label}
+                                  </p>
+                                  <p className="mt-1 max-w-[360px] truncate text-xs text-slate-500">
+                                    {meta.detail}
+                                  </p>
+                                  {meta.auctionId && (
+                                    <Link
+                                      to={`/auction/item/${meta.auctionId}`}
+                                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700 hover:text-indigo-900"
+                                    >
+                                      View auction
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    </Link>
+                                  )}
+                                </td>
+                                <td className={`px-4 py-3 font-bold ${meta.tone}`}>
+                                  {formatCurrency(transaction.amount)}
+                                  <p className="mt-1 text-xs font-medium text-slate-500">
+                                    Available{" "}
+                                    {formatCurrency(transaction.availableAfter)}
+                                  </p>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                    {transaction.status}
+                                  </span>
+                                  <p className="mt-2 text-xs text-slate-500">
+                                    Locked {formatCurrency(transaction.lockedAfter)}
+                                  </p>
+                                </td>
+                                <td className="px-4 py-3">
+                                  {formatDateTime(transaction.createdAt)}
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
                             <td
@@ -1282,6 +1320,28 @@ const Wallet = () => {
     </section>
   );
 };
+
+const moneyTrailTone = {
+  emerald: "border-emerald-100 bg-emerald-50 text-emerald-800",
+  indigo: "border-indigo-100 bg-indigo-50 text-indigo-800",
+  sky: "border-sky-100 bg-sky-50 text-sky-800",
+  violet: "border-violet-100 bg-violet-50 text-violet-800",
+};
+
+// eslint-disable-next-line react/prop-types
+const MoneyTrailStat = ({ label, value, detail, tone }) => (
+  <div
+    className={`rounded-md border p-4 ${
+      moneyTrailTone[tone] || moneyTrailTone.indigo
+    }`}
+  >
+    <p className="text-xs font-bold uppercase tracking-[0.12em] opacity-80">
+      {label}
+    </p>
+    <p className="mt-2 text-xl font-bold">{value}</p>
+    <p className="mt-1 text-xs opacity-80">{detail}</p>
+  </div>
+);
 
 // eslint-disable-next-line react/prop-types
 const FloatingWalletActions = ({ availableBalance, canDeposit, canWithdraw, hidden, onDeposit, onWithdraw }) => {
