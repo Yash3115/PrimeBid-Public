@@ -20,7 +20,9 @@ import {
 } from "../controllers/walletController.js";
 import {
     fetchFulfillmentDisputes,
+    fetchFulfillmentSettlements,
     reviewFulfillmentDispute,
+    reviewFulfillmentSettlement,
 } from "../controllers/fulfillmentController.js";
 const router = express.Router();
 
@@ -40,6 +42,8 @@ router.get("/wallet/withdrawals",isAuth,isAuthorised("Super Admin"),fetchWithdra
 router.put("/wallet/withdrawals/:id",isAuth,isAuthorised("Super Admin"),reviewWithdrawalRequest)
 router.get("/fulfillment/disputes",isAuth,isAuthorised("Super Admin"),fetchFulfillmentDisputes)
 router.put("/fulfillment/disputes/:id",isAuth,isAuthorised("Super Admin"),reviewFulfillmentDispute)
+router.get("/fulfillment/settlements",isAuth,isAuthorised("Super Admin"),fetchFulfillmentSettlements)
+router.put("/fulfillment/settlements/:id",isAuth,isAuthorised("Super Admin"),reviewFulfillmentSettlement)
 
 router.get("/monthlyincome", isAuth, isAuthorised("Super Admin"),monthlyRevenue);
 export default router;

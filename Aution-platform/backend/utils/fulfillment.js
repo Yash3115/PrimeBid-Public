@@ -180,6 +180,36 @@ export const normalizeAdminDisputeReview = (input = {}) => {
   };
 };
 
+export const normalizeAdminSettlementReview = (input = {}) => {
+  const settlementAction = cleanString(input.settlementAction, 60);
+  const adminResolution = cleanString(
+    input.adminResolution || input.note,
+    1000
+  );
+
+  if (
+    ![
+      SETTLEMENT_ACTION.RELEASE_TO_SELLER,
+      SETTLEMENT_ACTION.REFUND_BUYER,
+    ].includes(settlementAction)
+  ) {
+    const err = new Error("Choose whether to release escrow or refund the buyer");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (adminResolution.length < 10) {
+    const err = new Error("Escrow settlement decisions require an admin note");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return {
+    settlementAction,
+    adminResolution,
+  };
+};
+
 export const getFulfillmentProgress = (status) => {
   const steps = [
     FULFILLMENT_STATUS.AWAITING_ADDRESS,

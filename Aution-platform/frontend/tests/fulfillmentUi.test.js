@@ -6,6 +6,7 @@ import {
   SETTLEMENT_STATUS,
   canEditDeliveryAddress,
   canConfirmDelivery,
+  canAdminSettleEscrow,
   disputeIssueTypeOptions,
   getAuctionIdFromFulfillment,
   getDisputeLabel,
@@ -85,6 +86,38 @@ test("formats escrow settlement labels and confirmation state", () => {
     canConfirmDelivery({
       status: FULFILLMENT_STATUS.DELIVERED,
       settlementStatus: SETTLEMENT_STATUS.UNDER_DISPUTE,
+      dispute: { isOpen: true },
+    }),
+    false
+  );
+});
+
+test("allows admin escrow settlement only when captured funds are actionable", () => {
+  assert.equal(
+    canAdminSettleEscrow({
+      settlementStatus: SETTLEMENT_STATUS.READY_TO_RELEASE,
+      settlement: { escrowAmount: 10000 },
+    }),
+    true
+  );
+  assert.equal(
+    canAdminSettleEscrow({
+      settlementStatus: SETTLEMENT_STATUS.NEEDS_REVIEW,
+      winningAmount: 10000,
+    }),
+    false
+  );
+  assert.equal(
+    canAdminSettleEscrow({
+      settlementStatus: SETTLEMENT_STATUS.HELD_IN_ESCROW,
+      winningAmount: 10000,
+    }),
+    false
+  );
+  assert.equal(
+    canAdminSettleEscrow({
+      settlementStatus: SETTLEMENT_STATUS.READY_TO_RELEASE,
+      settlement: { escrowAmount: 10000 },
       dispute: { isOpen: true },
     }),
     false

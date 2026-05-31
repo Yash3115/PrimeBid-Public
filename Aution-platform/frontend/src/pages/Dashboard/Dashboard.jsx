@@ -5,6 +5,7 @@ import {
   getAdminOperations,
   clearAllSuperAdminSliceErrors,
   getAllUsers,
+  getFulfillmentSettlements,
   getKycSubmissions,
   getMonthlyRevenue,
   getWithdrawalRequests,
@@ -34,6 +35,7 @@ import UserManagement from "./sub-components/UserManagement";
 import KycManagement from "./sub-components/KycManagement";
 import WithdrawalManagement from "./sub-components/WithdrawalManagement";
 import DisputeManagement from "./sub-components/DisputeManagement";
+import EscrowSettlementManagement from "./sub-components/EscrowSettlementManagement";
 import SellerRiskManagement from "./sub-components/SellerRiskManagement";
 import OperationsCenter from "./sub-components/OperationsCenter";
 
@@ -70,6 +72,7 @@ const Dashboard = () => {
     dispatch(getAllUsers());
     dispatch(getKycSubmissions("Pending"));
     dispatch(getWithdrawalRequests("Pending"));
+    dispatch(getFulfillmentSettlements("Review"));
     dispatch(clearAllSuperAdminSliceErrors());
   }, [authChecked, dispatch, isAuthenticated, navigateTo, user.role]);
 
@@ -91,6 +94,7 @@ const Dashboard = () => {
     { icon: BadgeIndianRupee, title: "Auctioneer KYC", id: "kyc", content: <KycManagement /> },
     { icon: BadgeIndianRupee, title: "Wallet Withdrawals", id: "withdrawals", content: <WithdrawalManagement /> },
     { icon: AlertTriangle, title: "Delivery Disputes", id: "disputes", content: <DisputeManagement /> },
+    { icon: Wallet, title: "Escrow Settlements", id: "escrow-settlements", content: <EscrowSettlementManagement /> },
     { icon: ShieldCheck, title: "Seller Risk", id: "seller-risk", content: <SellerRiskManagement /> },
     { icon: BarChart3, title: "Audit Log", id: "audit-log", content: <AuditLogs /> },
     {

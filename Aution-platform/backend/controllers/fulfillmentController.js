@@ -10,8 +10,10 @@ import {
   FULFILLMENT_STATUS,
   SETTLEMENT_ACTION,
   SETTLEMENT_STATUS,
+  activeEscrowSettlementStatuses,
   buildTimelineEntry,
   normalizeAdminDisputeReview,
+  normalizeAdminSettlementReview,
   normalizeDeliveryAddress,
   normalizeDisputeReport,
   normalizeDisputeResponse,
@@ -545,6 +547,167 @@ export const fetchFulfillmentDisputes = asyncErrorHandler(async (req, res, next)
   return res.status(200).json({
     success: true,
     disputes,
+  });
+});
+
+const buildSettlementFilterQuery = (status) => {
+  if (status === "Review") {
+    return {
+      settlementStatus: {
+        $in: [SETTLEMENT_STATUS.READY_TO_RELEASE, SETTLEMENT_STATUS.NEEDS_REVIEW],
+      },
+      "dispute.isOpen": { $ne: true },
+    };
+  }
+  if (status === "Active") {
+    return {
+      settlementStatus: { $in: activeEscrowSettlementStatuses },
+    };
+  }
+  if (status === "Finalized") {
+    return {
+      settlementStatus: {
+        $in: [
+          SETTLEMENT_STATUS.RELEASED_TO_SELLER,
+          SETTLEMENT_STATUS.REFUNDED_TO_BUYER,
+        ],
+      },
+    };
+  }
+  if (status === "All") {
+    return {};
+  }
+  if (Object.values(SETTLEMENT_STATUS).includes(status)) {
+    return { settlementStatus: status };
+  }
+  return null;
+};
+
+const fetchSettlementList = (query) =>
+  Fulfillment.find(query)
+    .populate(fulfillmentPopulate)
+    .sort({ updatedAt: -1 })
+    .limit(100);
+
+export const fetchFulfillmentSettlements = asyncErrorHandler(async (req, res, next) => {
+  const { status = "Review" } = req.query;
+  const query = buildSettlementFilterQuery(status);
+  if (!query) {
+    const err = new Error("Invalid settlement status filter");
+    err.statusCode = 400;
+    return next(err);
+  }
+
+  const settlements = await fetchSettlementList(query);
+
+  return res.status(200).json({
+    success: true,
+    settlements,
+  });
+});
+
+export const reviewFulfillmentSettlement = asyncErrorHandler(async (req, res, next) => {
+  const { id } = req.params;
+  assertObjectId(id, "fulfillment ID");
+
+  const fulfillment = await Fulfillment.findById(id);
+  if (!fulfillment) {
+    const err = new Error("Fulfillment settlement not found");
+    err.statusCode = 404;
+    return next(err);
+  }
+  if (fulfillment.dispute?.isOpen) {
+    const err = new Error("Resolve the open delivery dispute before settling escrow");
+    err.statusCode = 409;
+    return next(err);
+  }
+  const capturedEscrowAmount = Number(fulfillment.settlement?.escrowAmount || 0);
+  if (!Number.isFinite(capturedEscrowAmount) || capturedEscrowAmount <= 0) {
+    const err = new Error("Captured escrow is not available for this fulfillment");
+    err.statusCode = 409;
+    return next(err);
+  }
+  if (!isActiveEscrowSettlement(fulfillment.settlementStatus)) {
+    const err = new Error("Escrow is not available for this fulfillment");
+    err.statusCode = 409;
+    return next(err);
+  }
+
+  const review = normalizeAdminSettlementReview(req.body);
+  let settlementResult = null;
+  await runWithOptionalTransaction(async ({ session }) => {
+    if (review.settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER) {
+      settlementResult = await releaseEscrowToSeller({
+        fulfillment,
+        actor: req.user._id,
+        actorRole: "Super Admin",
+        note: review.adminResolution,
+        session,
+      });
+    } else {
+      settlementResult = await refundEscrowToBuyer({
+        fulfillment,
+        actor: req.user._id,
+        actorRole: "Super Admin",
+        note: review.adminResolution,
+        session,
+      });
+    }
+  });
+
+  await AuditLog.create({
+    actor: req.user._id,
+    action: "ESCROW_SETTLEMENT_REVIEWED",
+    targetType: "Fulfillment",
+    targetId: fulfillment._id,
+    summary:
+      review.settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER
+        ? "Escrow released to seller"
+        : "Escrow refunded to buyer",
+  });
+
+  const auctionId = fulfillment.auction?._id || fulfillment.auction;
+  const title =
+    review.settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER
+      ? "Escrow released"
+      : "Escrow refunded";
+  const buyerMessage =
+    review.settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER
+      ? "Admin reviewed the order and released escrow to the seller."
+      : "Admin reviewed the order and refunded the winning amount to your wallet.";
+  const sellerMessage =
+    review.settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER
+      ? "Admin reviewed the order and released seller proceeds to your wallet."
+      : "Admin reviewed the order and refunded escrow to the buyer.";
+
+  await Promise.all([
+    createNotification({
+      user: fulfillment.bidder,
+      auction: auctionId,
+      type: "wallet",
+      title,
+      message: buyerMessage,
+      actionPath: "/won-auctions",
+    }),
+    createNotification({
+      user: fulfillment.seller,
+      auction: auctionId,
+      type: "wallet",
+      title,
+      message: sellerMessage,
+      actionPath: "/seller-dashboard#fulfillment",
+    }),
+  ]);
+
+  return res.status(200).json({
+    success: true,
+    message:
+      review.settlementAction === SETTLEMENT_ACTION.RELEASE_TO_SELLER
+        ? "Escrow released to seller"
+        : "Escrow refunded to buyer",
+    fulfillment: await populateFulfillment(fulfillment._id),
+    settlement: settlementResult,
+    settlements: await fetchSettlementList(buildSettlementFilterQuery("Review")),
   });
 });
 

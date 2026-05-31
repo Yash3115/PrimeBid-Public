@@ -157,6 +157,17 @@ export const getSettlementTone = (status) =>
 export const hasActiveEscrow = (fulfillment) =>
   activeEscrowSettlementStatuses.includes(fulfillment?.settlementStatus);
 
+export const canAdminSettleEscrow = (fulfillment) => {
+  const escrowAmount = Number(fulfillment?.settlement?.escrowAmount || 0);
+
+  return (
+    hasActiveEscrow(fulfillment) &&
+    !hasOpenDispute(fulfillment) &&
+    Number.isFinite(escrowAmount) &&
+    escrowAmount > 0
+  );
+};
+
 export const canConfirmDelivery = (fulfillment) =>
   fulfillment?.status === FULFILLMENT_STATUS.DELIVERED &&
   hasActiveEscrow(fulfillment) &&

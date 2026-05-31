@@ -19,6 +19,7 @@ const superAdminSlice = createSlice({
     auditLogs: [],
     withdrawalRequests: [],
     fulfillmentDisputes: [],
+    fulfillmentSettlements: [],
   },
   reducers: {
     requestForMonthlyRevenue(state) {
@@ -76,6 +77,9 @@ const superAdminSlice = createSlice({
     },
     fulfillmentDisputesSuccess(state, action) {
       state.fulfillmentDisputes = action.payload;
+    },
+    fulfillmentSettlementsSuccess(state, action) {
+      state.fulfillmentSettlements = action.payload;
     },
     adminOverviewSuccess(state, action) {
       state.overview = action.payload;
@@ -340,6 +344,52 @@ export const reviewFulfillmentDispute =
       );
       toast.success(response.data.message);
       dispatch(getFulfillmentDisputes(currentFilter));
+      dispatch(getAuditLogs());
+      dispatch(getAdminOverview());
+      dispatch(getAdminOperations());
+      return response.data;
+    } catch (error) {
+      toastApiError(error);
+      return { success: false };
+    }
+  };
+
+export const getFulfillmentSettlements =
+  (status = "Review") =>
+  async (dispatch) => {
+    try {
+      const response = await api.get("/superadmin/fulfillment/settlements", {
+        params: { status },
+      });
+      dispatch(
+        superAdminSlice.actions.fulfillmentSettlementsSuccess(
+          response.data.settlements
+        )
+      );
+    } catch (error) {
+      console.error(getErrorMessage(error));
+    }
+  };
+
+export const reviewFulfillmentSettlement =
+  (id, data, currentFilter = "Review") =>
+  async (dispatch) => {
+    try {
+      const response = await api.put(
+        `/superadmin/fulfillment/settlements/${id}`,
+        data,
+        { headers: { "Content-Type": "application/json" } }
+      );
+      toast.success(response.data.message);
+      if (currentFilter === "Review" && response.data.settlements) {
+        dispatch(
+          superAdminSlice.actions.fulfillmentSettlementsSuccess(
+            response.data.settlements
+          )
+        );
+      } else {
+        dispatch(getFulfillmentSettlements(currentFilter));
+      }
       dispatch(getAuditLogs());
       dispatch(getAdminOverview());
       dispatch(getAdminOperations());

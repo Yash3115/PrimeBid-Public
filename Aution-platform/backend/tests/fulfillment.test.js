@@ -6,6 +6,7 @@ import {
   SETTLEMENT_ACTION,
   getFulfillmentProgress,
   normalizeAdminDisputeReview,
+  normalizeAdminSettlementReview,
   normalizeDeliveryAddress,
   normalizeDisputeReport,
   normalizeDisputeResponse,
@@ -137,5 +138,34 @@ test("requires admin resolution notes for final dispute decisions", () => {
       settlementAction: SETTLEMENT_ACTION.RELEASE_TO_SELLER,
     }).isFinal,
     true
+  );
+});
+
+test("normalizes direct admin escrow settlement reviews", () => {
+  assert.deepEqual(
+    normalizeAdminSettlementReview({
+      settlementAction: SETTLEMENT_ACTION.RELEASE_TO_SELLER,
+      adminResolution: "Buyer did not respond after delivery proof window.",
+    }),
+    {
+      settlementAction: SETTLEMENT_ACTION.RELEASE_TO_SELLER,
+      adminResolution: "Buyer did not respond after delivery proof window.",
+    }
+  );
+  assert.throws(
+    () =>
+      normalizeAdminSettlementReview({
+        settlementAction: SETTLEMENT_ACTION.NONE,
+        adminResolution: "Hold",
+      }),
+    /release escrow or refund/
+  );
+  assert.throws(
+    () =>
+      normalizeAdminSettlementReview({
+        settlementAction: SETTLEMENT_ACTION.REFUND_BUYER,
+        adminResolution: "refund",
+      }),
+    /admin note/
   );
 });

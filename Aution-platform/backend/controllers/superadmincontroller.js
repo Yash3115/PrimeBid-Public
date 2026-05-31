@@ -761,7 +761,7 @@ const fetchAdminOperations = asyncErrorHandler(async(req,res,next)=>{
             id: "settlement",
             label: "Escrow Settlement",
             detail: "Captured funds waiting for admin or buyer confirmation.",
-            href: "#disputes",
+            href: "#escrow-settlements",
             priority: "high",
             emptyLabel: "No settlement reviews pending.",
             items: settlementReviews.map((fulfillment) =>
@@ -772,7 +772,7 @@ const fetchAdminOperations = asyncErrorHandler(async(req,res,next)=>{
                     status: fulfillment.settlementStatus,
                     amount: fulfillment.settlement?.escrowAmount || fulfillment.winningAmount,
                     createdAt: fulfillment.updatedAt,
-                    href: "#disputes",
+                    href: "#escrow-settlements",
                     actionLabel: "Review escrow",
                     priority:
                         fulfillment.settlementStatus === SETTLEMENT_STATUS.NEEDS_REVIEW
