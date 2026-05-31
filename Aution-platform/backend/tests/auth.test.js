@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getRequestToken } from "../middlewares/auth.js";
+import { getRequestToken, optionalAuth } from "../middlewares/auth.js";
 
 const requestWith = ({ cookieToken, authorization } = {}) => ({
   cookies: cookieToken ? { token: cookieToken } : {},
@@ -35,4 +35,8 @@ test("auth middleware ignores malformed authorization headers", () => {
     getRequestToken(requestWith({ authorization: "Token not-supported" })),
     null
   );
+});
+
+test("auth middleware exports optional auth for public auction routes", () => {
+  assert.equal(typeof optionalAuth, "function");
 });

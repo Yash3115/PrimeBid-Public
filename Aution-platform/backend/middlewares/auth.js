@@ -34,6 +34,27 @@ const isAuth = asyncErrorHandler(async(req,res,next)=>{
     }
     next();
 });
+
+const optionalAuth = asyncErrorHandler(async(req,res,next)=>{
+    const token = getRequestToken(req);
+    if(!token){
+        return next();
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = await User.findById(decoded.id);
+        if(user && user.accountStatus !== "Paused"){
+            req.user = user;
+        }
+    } catch {
+        // Public routes should remain readable even when a stale token is present.
+        req.user = undefined;
+    }
+
+    next();
+});
+
 const isAuthorised = (...roles)=>{
     return (req,res,next)=>{
         if(!roles.includes(req.user.role)){
@@ -45,4 +66,4 @@ const isAuthorised = (...roles)=>{
     }
 }
 
-export {isAuth,isAuthorised, getRequestToken};
+export {isAuth,isAuthorised, optionalAuth, getRequestToken};
