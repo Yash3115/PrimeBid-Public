@@ -5,8 +5,21 @@ import User from "../models/userSchema.js";
 import Commission from "../models/commissionSchema.js";
 import Bid from "../models/bidSchema.js";
 import AuditLog from "../models/auditLogSchema.js";
+import Fulfillment from "../models/fulfillmentSchema.js";
 import PlatformTransaction from "../models/platformTransactionSchema.js";
+import WithdrawalRequest from "../models/withdrawalRequestSchema.js";
 import { createNotification } from "../utils/notifications.js";
+import {
+    AUCTION_RUNTIME_STATUS,
+    getAuctionTiming,
+} from "../utils/auctionStatus.js";
+import {
+    buildAdminActionQueue,
+    buildAuctionRuntimeSummary,
+    buildWalletTotals,
+    countRowsById,
+    sumRowsById,
+} from "../utils/adminDashboard.js";
 import {
     getOrCreatePlatformAccount,
     getPlatformSnapshot,
@@ -256,6 +269,122 @@ const fetchAuditLogs = asyncErrorHandler(async(req,res,next)=>{
     });
 });
 
+const fetchAdminOverview = asyncErrorHandler(async(req,res,next)=>{
+    const now = new Date();
+    const [
+        usersByRoleRows,
+        usersByStatusRows,
+        kycRows,
+        walletRows,
+        auctions,
+        totalBids,
+        withdrawalAmountRows,
+        fulfillmentRows,
+        platformAccount,
+        recentPlatformTransactions,
+        recentAuctions,
+    ] = await Promise.all([
+        User.aggregate([
+            { $group: { _id: "$role", count: { $sum: 1 } } },
+        ]),
+        User.aggregate([
+            { $group: { _id: "$accountStatus", count: { $sum: 1 } } },
+        ]),
+        User.aggregate([
+            { $match: { role: "Auctioneer" } },
+            { $group: { _id: "$kycStatus", count: { $sum: 1 } } },
+        ]),
+        User.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    availableBalance: { $sum: "$wallet.availableBalance" },
+                    lockedBalance: { $sum: "$wallet.lockedBalance" },
+                    lifetimeDeposited: { $sum: "$wallet.lifetimeDeposited" },
+                    lifetimeWithdrawn: { $sum: "$wallet.lifetimeWithdrawn" },
+                },
+            },
+        ]),
+        Auction.find()
+            .select("title startTime endTime status currentBid startingBid bids createdBy updatedAt")
+            .lean(),
+        Bid.countDocuments(),
+        WithdrawalRequest.aggregate([
+            {
+                $group: {
+                    _id: "$status",
+                    count: { $sum: 1 },
+                    amount: { $sum: "$amount" },
+                },
+            },
+        ]),
+        Fulfillment.aggregate([
+            { $group: { _id: "$status", count: { $sum: 1 } } },
+        ]),
+        getOrCreatePlatformAccount(),
+        PlatformTransaction.find().sort({ createdAt: -1 }).limit(5).lean(),
+        Auction.find()
+            .select("title image currentBid status startTime endTime createdBy updatedAt")
+            .populate("createdBy", "userName email")
+            .sort({ updatedAt: -1 })
+            .limit(6)
+            .lean(),
+    ]);
+
+    const usersByRole = countRowsById(usersByRoleRows);
+    const usersByStatus = countRowsById(usersByStatusRows);
+    const kyc = countRowsById(kycRows);
+    const withdrawalsByStatus = sumRowsById(withdrawalAmountRows);
+    const fulfillment = countRowsById(fulfillmentRows);
+    const walletTotals = buildWalletTotals(walletRows);
+    const auctionRuntime = buildAuctionRuntimeSummary(auctions, now);
+    const activeNoBidAuctions = auctions.filter((auction) => {
+        if (auction.status === "Draft" || (auction.bids || []).length > 0) {
+            return false;
+        }
+        const runtimeStatus = getAuctionTiming(auction, now).runtimeStatus;
+        return [
+            AUCTION_RUNTIME_STATUS.UPCOMING,
+            AUCTION_RUNTIME_STATUS.LIVE,
+        ].includes(runtimeStatus);
+    }).length;
+    const actionQueue = buildAdminActionQueue({
+        pendingKyc: kyc.Pending,
+        pendingWithdrawals: withdrawalsByStatus.Pending?.count,
+        awaitingAddress: fulfillment.AwaitingAddress,
+        readyToShip: fulfillment.ReadyToShip,
+        issueReported: fulfillment.IssueReported,
+        atRiskAuctions: activeNoBidAuctions,
+    });
+
+    return res.status(200).json({
+        success: true,
+        overview: {
+            generatedAt: now.toISOString(),
+            users: {
+                total: Object.values(usersByRole).reduce((total, count) => total + count, 0),
+                byRole: usersByRole,
+                byStatus: usersByStatus,
+            },
+            auctions: {
+                ...auctionRuntime,
+                totalBids,
+                activeNoBidAuctions,
+            },
+            kyc,
+            wallet: walletTotals,
+            withdrawals: {
+                byStatus: withdrawalsByStatus,
+            },
+            fulfillment,
+            platform: getPlatformSnapshot(platformAccount),
+            actionQueue,
+            recentPlatformTransactions,
+            recentAuctions,
+        },
+    });
+});
+
 const monthlyRevenue = asyncErrorHandler(async(req,res,next)=>{
     const payments = await Commission.aggregate([
         {
@@ -301,6 +430,7 @@ const monthlyRevenue = asyncErrorHandler(async(req,res,next)=>{
 
 export {
     removefromAuction,
+    fetchAdminOverview,
     fetchAllusers,
     fetchUsersList,
     updateUserStatus,

@@ -20,9 +20,29 @@ const WithdrawalManagement = () => {
     await dispatch(reviewWithdrawalRequest(id, status, comments[id] || ""));
     setComments((current) => ({ ...current, [id]: "" }));
   };
+  const totalAmount = withdrawalRequests.reduce(
+    (total, withdrawal) => total + Number(withdrawal.amount || 0),
+    0
+  );
+  const pendingCount = withdrawalRequests.filter(
+    (withdrawal) => withdrawal.status === "Pending"
+  ).length;
 
   return (
     <div className="grid gap-4">
+      <div className="grid gap-3 md:grid-cols-3">
+        <WithdrawalSummaryCard label="Visible requests" value={withdrawalRequests.length} />
+        <WithdrawalSummaryCard
+          label="Visible amount"
+          value={formatCurrency(totalAmount)}
+        />
+        <WithdrawalSummaryCard
+          label="Needs action"
+          value={pendingCount}
+          detail={statusFilter === "Pending" ? "Current review queue" : "In current filter"}
+        />
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-slate-500">
           Review user wallet withdrawals before manual bank payout.
@@ -68,8 +88,9 @@ const WithdrawalManagement = () => {
                   <td className="px-4 py-3">
                     <p>{withdrawal.bankDetailsSnapshot?.bankName || "Not set"}</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      {withdrawal.bankDetailsSnapshot?.bankAccountNumber ||
-                        "No account"}
+                      {maskAccountNumber(
+                        withdrawal.bankDetailsSnapshot?.bankAccountNumber
+                      )}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
                       {withdrawal.bankDetailsSnapshot?.bankIFSCCode || "No IFSC"}
@@ -140,5 +161,23 @@ const WithdrawalManagement = () => {
     </div>
   );
 };
+
+const maskAccountNumber = (accountNumber) => {
+  const value = String(accountNumber || "").trim();
+  if (!value) return "No account";
+  if (value.length <= 4) return value;
+  return `${"*".repeat(Math.min(value.length - 4, 8))}${value.slice(-4)}`;
+};
+
+// eslint-disable-next-line react/prop-types
+const WithdrawalSummaryCard = ({ label, value, detail }) => (
+  <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+    <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+      {label}
+    </p>
+    <p className="mt-2 text-xl font-bold text-slate-950">{value}</p>
+    {detail && <p className="mt-1 text-xs text-slate-500">{detail}</p>}
+  </div>
+);
 
 export default WithdrawalManagement;

@@ -7,6 +7,7 @@ const superAdminSlice = createSlice({
   name: "superAdmin",
   initialState: {
     loading: false,
+    overview: null,
     monthlyRevenue: [],
     platformAccount: null,
     platformTransactions: [],
@@ -71,8 +72,22 @@ const superAdminSlice = createSlice({
     withdrawalRequestsSuccess(state, action) {
       state.withdrawalRequests = action.payload;
     },
+    adminOverviewSuccess(state, action) {
+      state.overview = action.payload;
+    },
   },
 });
+
+export const getAdminOverview = () => async (dispatch) => {
+  try {
+    const response = await api.get("/superadmin/overview");
+    dispatch(superAdminSlice.actions.adminOverviewSuccess(response.data.overview));
+    return response.data;
+  } catch (error) {
+    console.error(getErrorMessage(error));
+    return { success: false };
+  }
+};
 
 export const getMonthlyRevenue = () => async (dispatch) => {
   dispatch(superAdminSlice.actions.requestForMonthlyRevenue());

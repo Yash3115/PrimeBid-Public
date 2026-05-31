@@ -1,6 +1,7 @@
 import Spinner from "@/custom-components/Spinner";
-import { formatCurrency, getAuctionStatus } from "@/lib/format";
+import { formatCurrency, formatDateTime, getAuctionStatus } from "@/lib/format";
 import {
+  getAdminOverview,
   clearAllSuperAdminSliceErrors,
   getAllUsers,
   getKycSubmissions,
@@ -10,9 +11,15 @@ import {
 import {
   BadgeIndianRupee,
   BarChart3,
+  CheckCircle2,
+  Clock3,
   Gavel,
+  IndianRupee,
+  PackageCheck,
+  ShieldCheck,
   Trash2,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -25,6 +32,8 @@ import UserManagement from "./sub-components/UserManagement";
 import KycManagement from "./sub-components/KycManagement";
 import WithdrawalManagement from "./sub-components/WithdrawalManagement";
 
+/* eslint-disable react/prop-types */
+
 const Dashboard = () => {
   const dispatch = useDispatch();
   const navigateTo = useNavigate();
@@ -35,6 +44,7 @@ const Dashboard = () => {
   );
   const {
     monthlyRevenue,
+    overview,
     platformAccount,
     kycSubmissions,
     totalAuctioneers,
@@ -50,6 +60,7 @@ const Dashboard = () => {
     }
 
     dispatch(getMonthlyRevenue());
+    dispatch(getAdminOverview());
     dispatch(getAllUsers());
     dispatch(getKycSubmissions("Pending"));
     dispatch(getWithdrawalRequests("Pending"));
@@ -80,36 +91,51 @@ const Dashboard = () => {
     (total, amount) => total + Number(amount || 0),
     0
   );
-  const pendingWithdrawals = withdrawalRequests.filter(
+  const localPendingWithdrawals = withdrawalRequests.filter(
     (withdrawal) => withdrawal.status === "Pending"
   ).length;
-  const pendingKyc = kycSubmissions.length;
-  const activeAuctions = allAuctions.filter(
+  const overviewPendingWithdrawals =
+    overview?.withdrawals?.byStatus?.Pending?.count;
+  const pendingWithdrawals =
+    Number.isFinite(Number(overviewPendingWithdrawals))
+      ? Number(overviewPendingWithdrawals)
+      : localPendingWithdrawals;
+  const pendingWithdrawalAmount =
+    overview?.withdrawals?.byStatus?.Pending?.amount || 0;
+  const pendingKyc = overview?.kyc?.Pending ?? kycSubmissions.length;
+  const activeAuctionsFromOverview = overview?.auctions?.live;
+  const activeAuctionsFallback = allAuctions.filter(
     (auction) =>
       getAuctionStatus(auction, undefined, serverTime, serverTimeReceivedAt) ===
       "Live"
   ).length;
-  const registeredUsers =
+  const activeAuctions =
+    activeAuctionsFromOverview ?? activeAuctionsFallback;
+  const registeredUsersFallback =
     totalAuctioneers.reduce((total, count) => total + Number(count || 0), 0) +
     totalBidders.reduce((total, count) => total + Number(count || 0), 0);
+  const registeredUsers = overview?.users?.total ?? registeredUsersFallback;
+  const totalAuctions = overview?.auctions?.total ?? allAuctions.length;
+  const platformBalance =
+    overview?.platform?.availableBalance ?? platformAccount?.availableBalance ?? totalRevenue;
   const summaryCards = [
     {
-      icon: BadgeIndianRupee,
+      icon: Wallet,
       label: "Platform Balance",
-      value: formatCurrency(platformAccount?.availableBalance ?? totalRevenue),
+      value: formatCurrency(platformBalance),
       detail: "Auto-deducted wallet commission",
     },
     {
-      icon: BadgeIndianRupee,
+      icon: IndianRupee,
       label: "Pending Withdrawals",
       value: pendingWithdrawals,
-      detail: "Wallet payout reviews",
+      detail: `${formatCurrency(pendingWithdrawalAmount)} waiting for review`,
     },
     {
       icon: Gavel,
       label: "Live Auctions",
       value: activeAuctions,
-      detail: `${allAuctions.length} total auctions`,
+      detail: `${totalAuctions} total auctions`,
     },
     {
       icon: Users,
@@ -117,21 +143,38 @@ const Dashboard = () => {
       value: registeredUsers,
       detail: "Bidders and auctioneers",
     },
-  ];
-  const opsQueue = [
     {
-      label: "KYC approvals",
-      value: pendingKyc,
-      to: "#kyc",
-      detail: "Auctioneers waiting to list",
+      icon: Clock3,
+      label: "Locked Wallet Funds",
+      value: formatCurrency(overview?.wallet?.lockedBalance || 0),
+      detail: "Reserved for bids and payouts",
     },
     {
-      label: "Withdrawals",
-      value: pendingWithdrawals,
-      to: "#withdrawals",
-      detail: "Manual payout queue",
+      icon: PackageCheck,
+      label: "Fulfillment Queue",
+      value: overview?.fulfillment?.ReadyToShip || 0,
+      detail: `${overview?.fulfillment?.AwaitingAddress || 0} awaiting address`,
     },
   ];
+  const opsQueue =
+    overview?.actionQueue?.length > 0
+      ? overview.actionQueue
+      : [
+          {
+            label: "KYC approvals",
+            count: pendingKyc,
+            href: "#kyc",
+            detail: "Auctioneers waiting to list",
+            priority: "high",
+          },
+          {
+            label: "Withdrawals",
+            count: pendingWithdrawals,
+            href: "#withdrawals",
+            detail: "Manual payout queue",
+            priority: "critical",
+          },
+        ].filter((item) => item.count > 0);
 
   return (
     <section className="app-page">
@@ -151,21 +194,31 @@ const Dashboard = () => {
               </p>
             </div>
             <div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:min-w-[420px]">
-              {opsQueue.map((item) => (
+              {opsQueue.length > 0 ? opsQueue.map((item) => (
                 <a
                   key={item.label}
-                  href={item.to}
+                  href={item.href}
                   className="rounded-md border border-slate-200 bg-white p-3 transition hover:border-indigo-200 hover:bg-indigo-50"
                 >
                   <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
                     {item.label}
                   </p>
                   <p className="mt-1 text-2xl font-bold text-slate-950">
-                    {item.value}
+                    {item.count}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">{item.detail}</p>
                 </a>
-              ))}
+              )) : (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 sm:col-span-2">
+                  <p className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    No urgent admin queue
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-700">
+                    KYC, payout, and fulfillment queues are currently clear.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -215,6 +268,8 @@ const Dashboard = () => {
               ))}
             </div>
 
+            <OperationsPulse overview={overview} opsQueue={opsQueue} />
+
             {sections.map(({ icon: Icon, title, content, id }) => (
               <div
                 key={title}
@@ -234,5 +289,157 @@ const Dashboard = () => {
     </section>
   );
 };
+
+const priorityTone = {
+  critical: "border-red-200 bg-red-50 text-red-800",
+  high: "border-amber-200 bg-amber-50 text-amber-800",
+  medium: "border-indigo-200 bg-indigo-50 text-indigo-800",
+  low: "border-slate-200 bg-slate-50 text-slate-700",
+};
+
+const OperationsPulse = ({ overview, opsQueue }) => {
+  const auctionRows = [
+    ["Live", overview?.auctions?.live || 0],
+    ["Upcoming", overview?.auctions?.upcoming || 0],
+    ["Ended", overview?.auctions?.ended || 0],
+    ["Draft", overview?.auctions?.draft || 0],
+    ["Invalid dates", overview?.auctions?.invalid || 0],
+  ];
+  const financeRows = [
+    ["User available", formatCurrency(overview?.wallet?.availableBalance || 0)],
+    ["User locked", formatCurrency(overview?.wallet?.lockedBalance || 0)],
+    ["Deposited", formatCurrency(overview?.wallet?.lifetimeDeposited || 0)],
+    ["Withdrawn", formatCurrency(overview?.wallet?.lifetimeWithdrawn || 0)],
+    [
+      "Platform earned",
+      formatCurrency(overview?.platform?.lifetimeCommission || 0),
+    ],
+  ];
+  const fulfillmentRows = [
+    ["Awaiting address", overview?.fulfillment?.AwaitingAddress || 0],
+    ["Ready to ship", overview?.fulfillment?.ReadyToShip || 0],
+    ["Shipped", overview?.fulfillment?.Shipped || 0],
+    ["Out for delivery", overview?.fulfillment?.OutForDelivery || 0],
+    ["Issues", overview?.fulfillment?.IssueReported || 0],
+  ];
+
+  return (
+    <section
+      id="operations"
+      className="grid gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6 xl:grid-cols-[1.2fr_0.8fr]"
+    >
+      <div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="app-kicker">Operations Pulse</p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-950">
+              What needs attention now
+            </h2>
+          </div>
+          {overview?.generatedAt && (
+            <span className="w-fit rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600">
+              Updated {formatDateTime(overview.generatedAt)}
+            </span>
+          )}
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {opsQueue.length > 0 ? (
+            opsQueue.map((item) => (
+              <a
+                key={item.id || item.label}
+                href={item.href}
+                className={`rounded-md border p-4 transition hover:shadow-sm ${
+                  priorityTone[item.priority] || priorityTone.low
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold">{item.label}</p>
+                    <p className="mt-1 text-sm opacity-80">{item.detail}</p>
+                  </div>
+                  <span className="rounded-md bg-white/70 px-3 py-1 text-lg font-bold">
+                    {item.count}
+                  </span>
+                </div>
+              </a>
+            ))
+          ) : (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 md:col-span-2">
+              <p className="flex items-center gap-2 font-bold">
+                <CheckCircle2 className="h-5 w-5" />
+                No urgent operations waiting.
+              </p>
+              <p className="mt-1 text-sm text-emerald-700">
+                The trust, payout, and fulfillment queues are clear.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <MiniOpsList title="Auction lifecycle" icon={Gavel} rows={auctionRows} />
+          <MiniOpsList title="Wallet movement" icon={ShieldCheck} rows={financeRows} />
+          <MiniOpsList title="Fulfillment" icon={PackageCheck} rows={fulfillmentRows} />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="flex items-center gap-2 text-lg font-bold text-slate-950">
+          <BarChart3 className="h-5 w-5 text-indigo-600" />
+          Recent platform credits
+        </h3>
+        <div className="mt-4 grid gap-3">
+          {(overview?.recentPlatformTransactions || []).length > 0 ? (
+            overview.recentPlatformTransactions.map((transaction) => (
+              <div
+                key={transaction._id}
+                className="rounded-md border border-slate-200 bg-white p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-950">
+                      {transaction.type}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatDateTime(transaction.createdAt)}
+                    </p>
+                  </div>
+                  <p className="font-bold text-emerald-700">
+                    {formatCurrency(transaction.amount)}
+                  </p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-md border border-dashed border-slate-300 bg-white p-5 text-center text-sm text-slate-500">
+              Commission credits will appear here after auctions settle.
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const MiniOpsList = ({ title, icon: Icon, rows }) => (
+  <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
+    <h3 className="flex items-center gap-2 font-bold text-slate-950">
+      <Icon className="h-4 w-4 text-indigo-600" />
+      {title}
+    </h3>
+    <div className="mt-3 grid gap-2">
+      {rows.map(([label, value]) => (
+        <div
+          key={label}
+          className="flex items-center justify-between gap-3 text-sm"
+        >
+          <span className="text-slate-500">{label}</span>
+          <span className="font-bold text-slate-950">{value}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 export default Dashboard;
