@@ -12,6 +12,20 @@ const auctionSlice = createSlice({
     myAutoBid: { active: false, maxAmount: null },
     myAuctions: [],
     allAuctions: [],
+    auctionPagination: {
+      page: 1,
+      limit: 24,
+      totalItems: 0,
+      totalPages: 1,
+      hasNextPage: false,
+      hasPrevPage: false,
+    },
+    auctionFacets: {
+      statusCounts: { All: 0, Live: 0, Upcoming: 0, Ended: 0 },
+      categories: [],
+      conditions: [],
+    },
+    auctionQuery: {},
     auctionListError: null,
     serverTime: null,
     serverTimeReceivedAt: null,
@@ -41,6 +55,10 @@ const auctionSlice = createSlice({
     getAllAuctionItemSuccess(state, action) {
       state.loading = false;
       state.allAuctions = action.payload.items;
+      state.auctionPagination =
+        action.payload.pagination || state.auctionPagination;
+      state.auctionFacets = action.payload.facets || state.auctionFacets;
+      state.auctionQuery = action.payload.filters || {};
       state.serverTime = action.payload.serverTime;
       state.serverTimeReceivedAt = action.payload.receivedAt;
       state.auctionListError = null;
@@ -186,13 +204,25 @@ export const assistAuctionListing = (data) => async (dispatch) => {
   }
 };
 
-export const getAllAuctionItems = () => async (dispatch) => {
+const compactParams = (params = {}) =>
+  Object.fromEntries(
+    Object.entries(params).filter(
+      ([, value]) => value !== undefined && value !== null && value !== ""
+    )
+  );
+
+export const getAllAuctionItems = (params = {}) => async (dispatch) => {
   dispatch(auctionSlice.actions.getAllAuctionItemRequest());
   try {
-    const response = await api.get("/auctionitem/allitems");
+    const response = await api.get("/auctionitem/allitems", {
+      params: compactParams(params),
+    });
     dispatch(
       auctionSlice.actions.getAllAuctionItemSuccess({
         items: response.data.items,
+        pagination: response.data.pagination,
+        facets: response.data.facets,
+        filters: response.data.filters,
         serverTime: response.data.serverTime,
         receivedAt: Date.now(),
       })

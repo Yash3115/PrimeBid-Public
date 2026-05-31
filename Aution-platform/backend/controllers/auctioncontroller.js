@@ -19,6 +19,12 @@ import {
     buildSellerQualityMap,
     buildSellerQualityProfile,
 } from "../utils/sellerQuality.js";
+import {
+    MARKETPLACE_STATUS,
+    buildMarketplacePagination,
+    buildMarketplaceQuery,
+    getRuntimeStatusQuery,
+} from "../utils/auctionMarketplace.js";
 
 const allowedImageFormats = ["image/png", "image/jpeg", "image/webp"];
 
@@ -221,17 +227,50 @@ const addnewAuction = asyncErrorHandler(async (req, res, next) => {
 
 const getAllItem = asyncErrorHandler(async(req,res,next)=>{
     const now = new Date();
-    const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 200);
-    let items = await Auction.find({ status: { $ne: "Draft" } })
-        .populate("createdBy", "userName reputation kycStatus accountStatus createdAt")
-        .sort({ endTime: 1, createdAt: -1 })
-        .limit(limit);
-    const itemsWithQuality = await attachSellerQuality(items, now);
+    const marketplaceQuery = buildMarketplaceQuery(req.query, now);
+    const statusList = [
+        MARKETPLACE_STATUS.LIVE,
+        MARKETPLACE_STATUS.UPCOMING,
+        MARKETPLACE_STATUS.ENDED,
+    ];
+    const [items, totalItems, baseTotalItems, statusCountRows] = await Promise.all([
+        Auction.find(marketplaceQuery.mongoQuery)
+            .populate("createdBy", "userName reputation kycStatus accountStatus createdAt")
+            .sort(marketplaceQuery.sortQuery)
+            .skip(marketplaceQuery.skip)
+            .limit(marketplaceQuery.limit),
+        Auction.countDocuments(marketplaceQuery.mongoQuery),
+        Auction.countDocuments(marketplaceQuery.baseQuery),
+        Promise.all(
+            statusList.map(async (status) => [
+                status,
+                await Auction.countDocuments({
+                    ...marketplaceQuery.baseQuery,
+                    ...getRuntimeStatusQuery(status, now),
+                }),
+            ])
+        ),
+    ]);
+    const itemsWithQuality = await attachSellerQuality(items, now, null);
+    const statusCounts = Object.fromEntries(statusCountRows);
+    statusCounts.All = baseTotalItems;
     return res.status(200).json({
         success: true,
         serverTime: now.toISOString(),
         items: itemsWithQuality,
         count: itemsWithQuality.length,
+        totalCount: totalItems,
+        pagination: buildMarketplacePagination({
+            page: marketplaceQuery.page,
+            limit: marketplaceQuery.limit,
+            totalItems,
+        }),
+        filters: marketplaceQuery.filters,
+        facets: {
+            statusCounts,
+            categories: AUCTION_CATEGORIES,
+            conditions: AUCTION_CONDITIONS,
+        },
     })
 })
 

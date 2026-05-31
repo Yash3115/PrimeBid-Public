@@ -106,6 +106,8 @@ auctionschema.index({ status: 1, startTime: 1, endTime: 1 });
 auctionschema.index({ createdBy: 1, status: 1, endTime: -1 });
 auctionschema.index({ category: 1, endTime: 1 });
 auctionschema.index({ highestBidder: 1, endTime: -1 });
+auctionschema.index({ status: 1, category: 1, currentBid: 1, endTime: 1 });
+auctionschema.index({ status: 1, createdAt: -1 });
 
 const Auction = new mongoose.model("Auction",auctionschema);
 export default Auction;

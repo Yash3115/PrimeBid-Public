@@ -36,9 +36,13 @@ const Home = () => {
   ];
 
   const { isAuthenticated, leaderboard } = useSelector((state) => state.user);
-  const { allAuctions, serverTime, serverTimeReceivedAt } = useSelector(
-    (state) => state.auction
-  );
+  const {
+    allAuctions,
+    auctionFacets,
+    auctionPagination,
+    serverTime,
+    serverTimeReceivedAt,
+  } = useSelector((state) => state.auction);
   const liveAuctions = allAuctions.filter(
     (auction) =>
       getAuctionStatus(auction, undefined, serverTime, serverTimeReceivedAt) ===
@@ -54,9 +58,9 @@ const Home = () => {
     0
   );
   const marketplaceStats = [
-    ["Live auctions", liveAuctions, "Open for bidding now"],
-    ["Upcoming", upcomingAuctions, "Scheduled future listings"],
-    ["Total lots", allAuctions.length, "Published auction items"],
+    ["Live auctions", auctionFacets?.statusCounts?.Live ?? liveAuctions, "Open for bidding now"],
+    ["Upcoming", auctionFacets?.statusCounts?.Upcoming ?? upcomingAuctions, "Scheduled future listings"],
+    ["Total lots", auctionPagination?.totalItems ?? allAuctions.length, "Published auction items"],
     ["Bid volume", formatCurrency(totalBidVolume), "Tracked winner spend"],
   ];
   const highlightedAuctions = [...allAuctions]
