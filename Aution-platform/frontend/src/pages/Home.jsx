@@ -13,7 +13,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useSelector } from "react-redux";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import FeaturedAuctions from "./home-sub-components/FeaturedAuctions";
 import UpcomingAuctions from "./home-sub-components/UpcomingAuctions";
 import Leaderboard from "./home-sub-components/Leaderboard";
@@ -39,7 +39,9 @@ const Home = () => {
     },
   ];
 
-  const { isAuthenticated, leaderboard } = useSelector((state) => state.user);
+  const { authChecked, isAuthenticated, leaderboard, user } = useSelector(
+    (state) => state.user
+  );
   const {
     allAuctions,
     auctionFacets,
@@ -85,6 +87,10 @@ const Home = () => {
     [BadgeCheck, "Automatic settlement"],
     [Clock3, "Visible auction timing"],
   ];
+
+  if (authChecked && isAuthenticated && user?.role === "Super Admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <>

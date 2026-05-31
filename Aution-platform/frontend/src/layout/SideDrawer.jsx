@@ -184,7 +184,7 @@ const SideDrawer = () => {
                 {user?.role === "Super Admin" && (
                   <Link to="/dashboard" className={getRoleClass("/dashboard")}>
                     <BiBarChartSquare className="text-lg" />
-                    Dashboard
+                    Operations
                   </Link>
                 )}
 
