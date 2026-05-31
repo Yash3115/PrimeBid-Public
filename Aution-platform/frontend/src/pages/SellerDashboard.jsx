@@ -1,4 +1,6 @@
 import Spinner from "@/custom-components/Spinner";
+import ActionCenter from "@/custom-components/ActionCenter";
+import { buildSellerNextActions } from "@/lib/actionInsights";
 import {
   FULFILLMENT_STATUS,
   getAuctionIdFromFulfillment,
@@ -60,6 +62,13 @@ const SellerDashboard = () => {
   const noBidAuctions = sellerDashboard?.noBidAuctions || [];
   const recentAuctions = sellerDashboard?.recentAuctions || [];
   const fulfillmentQueue = sellerDashboard?.fulfillmentQueue || [];
+  const healthQueue = sellerDashboard?.healthQueue || [];
+  const nextActions = buildSellerNextActions({
+    availableBalance,
+    fulfillmentQueue,
+    healthQueue,
+    noBidAuctions,
+  });
   const readyToShipCount = Number(stats?.fulfillment?.ReadyToShip || 0);
   const awaitingAddressCount = Number(stats?.fulfillment?.AwaitingAddress || 0);
   const cards = [
@@ -181,7 +190,15 @@ const SellerDashboard = () => {
               ))}
             </div>
 
-            <Panel title="Fulfillment Queue">
+            <ActionCenter
+              title="Seller Next Actions"
+              subtitle="Prioritized work across shipments, listing health, and payouts."
+              emptyTitle="No seller actions waiting"
+              emptyText="Your active auctions and fulfillment queue are in good shape."
+              actions={nextActions}
+            />
+
+            <Panel id="fulfillment" title="Fulfillment Queue">
               {fulfillmentQueue.length > 0 ? (
                 <div className="grid gap-4">
                   {fulfillmentQueue.map((fulfillment) => (
@@ -340,8 +357,11 @@ const MiniMetric = ({ label, value }) => (
   </div>
 );
 
-const Panel = ({ title, children }) => (
-  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+const Panel = ({ title, children, id }) => (
+  <section
+    id={id}
+    className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-6"
+  >
     <h2 className="mb-4 text-xl font-semibold text-slate-950">{title}</h2>
     {children}
   </section>

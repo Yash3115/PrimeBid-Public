@@ -1,4 +1,9 @@
 import Spinner from "@/custom-components/Spinner";
+import ActionCenter from "@/custom-components/ActionCenter";
+import {
+  buildBidderNextActions,
+  getWinnerNextAction,
+} from "@/lib/actionInsights";
 import { formatCurrency, formatDateTime, getAuctionStatus } from "@/lib/format";
 import { getAllAuctionItems, getSmartRecommendations } from "@/store/slices/auctionSlice";
 import { fetchWatchlist, fetchWonAuctions } from "@/store/slices/userSlice";
@@ -112,6 +117,13 @@ const BidderDashboard = () => {
 
   const leadingLocks = bidLocks.slice(0, 4);
   const recommendations = smartRecommendations.slice(0, 4);
+  const nextActions = buildBidderNextActions({
+    availableBalance,
+    bidLocks,
+    outbidAuctions,
+    pendingWithdrawals,
+    wonAuctions,
+  });
   const actionItems = [
     {
       label: "Leading bids",
@@ -219,6 +231,13 @@ const BidderDashboard = () => {
               ))}
             </div>
 
+            <ActionCenter
+              title="Next Best Actions"
+              emptyTitle="You are all caught up"
+              emptyText="No urgent bids, wallet holds, or winner handoffs need action right now."
+              actions={nextActions}
+            />
+
             <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
               <Panel
                 title="Bids You Are Leading"
@@ -325,7 +344,7 @@ const BidderDashboard = () => {
                         key={auction._id}
                         image={auction.image?.url}
                         title={auction.title}
-                        subtitle={`Ended ${formatDateTime(auction.endTime)}`}
+                        subtitle={getWinnerNextAction(auction).label}
                         value={formatCurrency(auction.currentBid)}
                         to={`/auction/item/${auction._id}`}
                         tone="emerald"
