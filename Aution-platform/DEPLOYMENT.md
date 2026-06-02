@@ -52,6 +52,20 @@ curl http://localhost:8000/ready
 
 `/health` confirms the server process is alive. `/ready` confirms the API can connect to MongoDB.
 
+Seed or repair the demo Super Admin after `MONGODB_URL` is set:
+
+```bash
+cd backend
+npm run seed:admin
+```
+
+Default admin credentials created by that command:
+
+- Email: `admin@primebid.local`
+- Password: `PrimeBid@123`
+
+For a deployed backend, run the same command locally with the deployed backend's exact `MONGODB_URL`, or run it from the hosting provider's shell if available. If deployed login fails while local login works, the backend service is almost always pointing at a different MongoDB database or stale environment variable.
+
 ## Backend Environment Variables
 
 Set these for the backend service:
@@ -76,6 +90,11 @@ SMTP_FROM="PrimeBid <your-smtp-login@example.com>"
 AI_FEATURES_ENABLED=true
 GEMINI_MODEL=gemini-2.0-flash
 GEMINI_API_KEY=your-gemini-key
+ADMIN_SEED_USERNAME=PrimeBid Admin
+ADMIN_SEED_EMAIL=admin@primebid.local
+ADMIN_SEED_PASSWORD=PrimeBid@123
+ADMIN_SEED_PHONE=9000000001
+ADMIN_SEED_ADDRESS=PrimeBid admin workspace
 ```
 
 Notes:
@@ -86,6 +105,7 @@ Notes:
 - The API also accepts `Authorization: Bearer <token>` for deployed frontends where cross-site cookies are blocked.
 - Email delivery is used for auction-winner emails. Use either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT`. If `SMTP_HOST` is set, the backend uses host/port and ignores the service shortcut.
 - Common SMTP ports: `465` means SSL/TLS (`SMTP_SECURE=true`), while `587` means STARTTLS (`SMTP_SECURE=false`). Gmail typically requires an app password, not your normal password.
+- `ADMIN_SEED_*` variables are only used when running `npm run seed:admin`; the API does not create a default admin during normal startup.
 
 ## Frontend Environment Variables
 
@@ -182,6 +202,7 @@ Then verify from the frontend:
 ## Common Deployment Problems
 
 - Login works locally but not deployed: check `COOKIE_SECURE=true`, `CLIENT_URL`, `FRONTEND_URL`, and `VITE_API_BASE_URL`.
+- Admin seed works locally but deployed admin login still says invalid password: verify Vercel/Render has the same `MONGODB_URL` you seeded, then redeploy or rerun `npm run seed:admin` against the deployed database.
 - CORS error: set the exact frontend origin in backend `CLIENT_URL` and `FRONTEND_URL`.
 - Auction does not settle after ending: run `/api/v1/cron/all` with the `Authorization` header and check backend logs.
 - Winner email does not send: verify `SMTP_MAIL`, `SMTP_PASSWORD`, and either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT` in the backend environment.
