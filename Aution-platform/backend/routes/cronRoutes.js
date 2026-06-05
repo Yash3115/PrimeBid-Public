@@ -1,5 +1,6 @@
 import express from "express";
 import { runEndedAuctionTasks } from "../automation/endedAuctionCron.js";
+import { cleanupExpiredDemoSessions } from "../utils/demoMode.js";
 
 const router = express.Router();
 
@@ -35,10 +36,12 @@ router.get("/auctions", requireCronAccess, async (req, res, next) => {
 router.get("/all", requireCronAccess, async (req, res, next) => {
     try {
         const auctions = await runEndedAuctionTasks();
+        const demoCleanup = await cleanupExpiredDemoSessions();
         return res.status(200).json({
             success: true,
             result: {
                 auctions,
+                demoCleanup,
             },
         });
     } catch (error) {

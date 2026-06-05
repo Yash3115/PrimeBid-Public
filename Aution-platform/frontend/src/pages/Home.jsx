@@ -8,17 +8,20 @@ import {
   BadgeCheck,
   Clock3,
   Gavel,
+  PlayCircle,
   Search,
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
-import { useSelector } from "react-redux";
-import { Link, Navigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import FeaturedAuctions from "./home-sub-components/FeaturedAuctions";
 import UpcomingAuctions from "./home-sub-components/UpcomingAuctions";
 import Leaderboard from "./home-sub-components/Leaderboard";
+import { startDemo } from "@/store/slices/userSlice";
 
 const Home = () => {
+  const demoEnabled = import.meta.env.VITE_DEMO_MODE_ENABLED !== "false";
   const howItWorks = [
     {
       title: "Post Items",
@@ -39,7 +42,9 @@ const Home = () => {
     },
   ];
 
-  const { authChecked, isAuthenticated, leaderboard, user } = useSelector(
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { authChecked, isAuthenticated, leaderboard, loading, user } = useSelector(
     (state) => state.user
   );
   const {
@@ -92,6 +97,13 @@ const Home = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
+  const handleStartDemo = async () => {
+    const result = await dispatch(startDemo("Bidder"));
+    if (result?.success) {
+      navigate(result.demo?.dashboardPath || "/bidder-dashboard");
+    }
+  };
+
   return (
     <>
       <section className="app-page">
@@ -119,13 +131,26 @@ const Home = () => {
                       Browse Auctions
                     </Link>
                     {!isAuthenticated ? (
-                      <Link
-                        to="/sign-up"
-                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/15 px-5 py-3 font-bold text-white transition hover:bg-white/10"
-                      >
-                        Create Account
-                        <ArrowRight className="h-5 w-5" />
-                      </Link>
+                      <>
+                        {demoEnabled && (
+                          <button
+                            type="button"
+                            onClick={handleStartDemo}
+                            disabled={loading}
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-amber-400 px-5 py-3 font-bold text-slate-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            <PlayCircle className="h-5 w-5" />
+                            {loading ? "Starting Demo..." : "Try Demo"}
+                          </button>
+                        )}
+                        <Link
+                          to="/sign-up"
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/15 px-5 py-3 font-bold text-white transition hover:bg-white/10"
+                        >
+                          Create Account
+                          <ArrowRight className="h-5 w-5" />
+                        </Link>
+                      </>
                     ) : (
                       <Link
                         to="/dashboard"

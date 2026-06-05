@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const auditLogSchema = new mongoose.Schema(
     {
@@ -21,6 +22,8 @@ const auditLogSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+auditLogSchema.plugin(demoScopedModel);
 
 const AuditLog = mongoose.model("AuditLog", auditLogSchema);
 

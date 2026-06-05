@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const userSchema = new mongoose.Schema({
     userName:{
@@ -182,6 +183,8 @@ const userSchema = new mongoose.Schema({
         }
     }
 })
+
+userSchema.plugin(demoScopedModel);
 
 userSchema.index({ role: 1, accountStatus: 1 });
 userSchema.index({ role: 1, kycStatus: 1, createdAt: -1 });

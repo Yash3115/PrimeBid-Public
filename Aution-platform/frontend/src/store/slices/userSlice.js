@@ -2,7 +2,12 @@ import { createSlice } from "@reduxjs/toolkit";
 import { toast } from "react-toastify";
 import { api, getErrorMessage, toastApiError } from "@/lib/api";
 import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/authToken";
-import { resetWallet } from "./walletSlice";
+import {
+  clearDemoConversion,
+  getDemoConversion,
+  setDemoConversion,
+} from "@/lib/demoMode";
+import { fetchWallet, resetWallet } from "./walletSlice";
 
 const userSlice = createSlice({
   name: "user",
@@ -235,6 +240,7 @@ export const logout = () => async (dispatch) => {
   try {
     const response = await api.get("/user/logout");
     clearAuthToken();
+    clearDemoConversion();
     dispatch(userSlice.actions.logoutSuccess());
     dispatch(resetWallet());
     toast.success(response.data.message);
@@ -284,6 +290,125 @@ export const fetchUser = () => async (dispatch, getState) => {
       return;
     }
     console.error(error);
+  }
+};
+
+export const startDemo = (persona = "Bidder") => async (dispatch) => {
+  dispatch(userSlice.actions.loginRequest());
+  try {
+    const response = await api.post(
+      "/demo/start",
+      { persona },
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    setAuthToken(response.data.token);
+    setDemoConversion({
+      conversionToken: response.data.conversionToken,
+      demoSessionId: response.data.demo?.sessionId,
+      persona: response.data.demo?.persona,
+    });
+    dispatch(
+      userSlice.actions.loginSuccess({
+        user: response.data.user,
+        authenticatedAt: Date.now(),
+      })
+    );
+    dispatch(fetchWatchlist());
+    dispatch(fetchNotifications());
+    dispatch(fetchWallet());
+    toast.success(response.data.message);
+    dispatch(userSlice.actions.clearAllErrors());
+    return response.data;
+  } catch (error) {
+    dispatch(userSlice.actions.loginFailed());
+    toastApiError(error, "Demo mode is unavailable right now");
+    dispatch(userSlice.actions.clearAllErrors());
+    return { success: false };
+  }
+};
+
+export const switchDemoPersona = (persona) => async (dispatch) => {
+  dispatch(userSlice.actions.loginRequest());
+  try {
+    const response = await api.post(
+      "/demo/switch",
+      { persona },
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    setAuthToken(response.data.token);
+    setDemoConversion({
+      ...getDemoConversion(),
+      demoSessionId: response.data.demo?.sessionId,
+      persona: response.data.demo?.persona,
+    });
+    dispatch(
+      userSlice.actions.loginSuccess({
+        user: response.data.user,
+        authenticatedAt: Date.now(),
+      })
+    );
+    dispatch(fetchWatchlist());
+    dispatch(fetchNotifications());
+    dispatch(fetchWallet());
+    toast.success(response.data.message);
+    return response.data;
+  } catch (error) {
+    dispatch(userSlice.actions.loginFailed());
+    toastApiError(error, "Could not switch demo persona");
+    return { success: false };
+  }
+};
+
+export const exitDemo = () => async (dispatch) => {
+  try {
+    const response = await api.delete("/demo/session");
+    clearAuthToken();
+    clearDemoConversion();
+    dispatch(userSlice.actions.logoutSuccess());
+    dispatch(resetWallet());
+    toast.success(response.data.message);
+    return response.data;
+  } catch (error) {
+    clearAuthToken();
+    clearDemoConversion();
+    dispatch(userSlice.actions.logoutSuccess());
+    dispatch(resetWallet());
+    toastApiError(error, "Exited Demo Mode locally");
+    return { success: false };
+  }
+};
+
+export const convertDemoWatchlist = () => async (dispatch) => {
+  const { conversionToken, demoSessionId, persona } = getDemoConversion();
+  if (!conversionToken || !demoSessionId) {
+    return { success: true, copiedCount: 0 };
+  }
+  try {
+    const response = await api.post(
+      "/demo/convert-watchlist",
+      {
+        conversionToken,
+        demoSessionId,
+        persona,
+      },
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    clearDemoConversion();
+    dispatch(userSlice.actions.watchlistSuccess(response.data.watchlist || []));
+    if (response.data.copiedCount > 0) {
+      toast.success(response.data.message);
+    }
+    return response.data;
+  } catch (error) {
+    clearDemoConversion();
+    toastApiError(error, "Your real account was created, but demo watchlist conversion failed");
+    return { success: false };
   }
 };
 

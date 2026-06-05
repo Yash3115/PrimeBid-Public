@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const paymentproofSchema = new mongoose.Schema({
     userId:{
@@ -27,6 +28,8 @@ const paymentproofSchema = new mongoose.Schema({
     amount: Number,
     comment: String
 }, { timestamps: true })
+
+paymentproofSchema.plugin(demoScopedModel);
 
 paymentproofSchema.index({ status: 1, createdAt: 1 });
 paymentproofSchema.index({ userId: 1, status: 1 });

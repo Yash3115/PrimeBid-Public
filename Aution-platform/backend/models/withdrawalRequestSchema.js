@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const withdrawalRequestSchema = new mongoose.Schema(
     {
@@ -36,6 +37,8 @@ const withdrawalRequestSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+withdrawalRequestSchema.plugin(demoScopedModel);
 
 withdrawalRequestSchema.index({ user: 1, createdAt: -1 });
 withdrawalRequestSchema.index({ status: 1, createdAt: -1 });

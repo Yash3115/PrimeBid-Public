@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const platformAccountSchema = new mongoose.Schema(
     {
@@ -31,6 +32,8 @@ const platformAccountSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+platformAccountSchema.plugin(demoScopedModel);
 
 const PlatformAccount = mongoose.model(
     "PlatformAccount",

@@ -25,7 +25,7 @@ const router = express.Router();
 
 router.post("/create", isAuth,isAuthorised("Auctioneer"),requireAuctioneerKyc,addnewAuction);
 router.post("/draft", isAuth,isAuthorised("Auctioneer"),requireAuctioneerKyc,saveAuctionDraft);
-router.get("/allitems",getAllItem);
+router.get("/allitems",optionalAuth,getAllItem);
 router.get("/smart-recommendations",isAuth,getSmartRecommendations);
 router.get("/auction/:id/sync",optionalAuth,getAuctionSync);
 router.get("/auction/:id/stream",optionalAuth,streamAuctionEvents);

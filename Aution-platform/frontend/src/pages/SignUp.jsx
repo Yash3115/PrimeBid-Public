@@ -1,5 +1,6 @@
 import { getSafeRedirectPath } from "@/lib/navigation";
-import { register } from "@/store/slices/userSlice";
+import { getDemoConversion } from "@/lib/demoMode";
+import { convertDemoWatchlist, register } from "@/store/slices/userSlice";
 import { ImagePlus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -20,17 +21,31 @@ const SignUp = () => {
   const [profileImage, setProfileImage] = useState("");
   const [profileImagePreview, setProfileImagePreview] = useState("");
 
-  const { loading, isAuthenticated } = useSelector((state) => state.user);
+  const { loading, isAuthenticated, user } = useSelector((state) => state.user);
   const navigateTo = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
   const redirectPath = getSafeRedirectPath(location.state?.from);
+  const isDemoSignup =
+    new URLSearchParams(location.search).get("fromDemo") === "1" ||
+    Boolean(user?.isDemo) ||
+    Boolean(getDemoConversion().conversionToken);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !user?.isDemo && !isDemoSignup) {
       navigateTo(redirectPath, { replace: true });
     }
-  }, [isAuthenticated, navigateTo, redirectPath]);
+  }, [isAuthenticated, isDemoSignup, navigateTo, redirectPath, user?.isDemo]);
+
+  useEffect(() => {
+    if (!isDemoSignup || role) return;
+
+    if (user?.role === "Auctioneer") {
+      setRole("Auctioneer");
+    } else {
+      setRole("Bidder");
+    }
+  }, [isDemoSignup, role, user?.role]);
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -52,6 +67,11 @@ const SignUp = () => {
 
     const result = await dispatch(register(formData));
     if (result?.success) {
+      if (isDemoSignup) {
+        await dispatch(convertDemoWatchlist());
+        navigateTo("/dashboard", { replace: true });
+        return;
+      }
       navigateTo(redirectPath, { replace: true });
     }
   };
@@ -78,11 +98,12 @@ const SignUp = () => {
             Account
           </p>
           <h1 className="app-title">
-            Sign Up
+            {isDemoSignup ? "Create your real account" : "Sign Up"}
           </h1>
           <p className="mt-3 max-w-2xl leading-7 text-slate-600">
-            Create a bidder account to compete in auctions, or choose
-            auctioneer to list and manage items.
+            {isDemoSignup
+              ? "Keep the role and interests you explored in Demo Mode. Demo wallet funds, bids, auctions, shipments, and admin history stay sandbox-only."
+              : "Create a bidder account to compete in auctions, or choose auctioneer to list and manage items."}
           </p>
         </div>
 

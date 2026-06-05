@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const commissionschema = new mongoose.Schema({
     amount:{
@@ -53,6 +54,8 @@ const commissionschema = new mongoose.Schema({
         default: Date.now,
     }
 })
+
+commissionschema.plugin(demoScopedModel);
 
 commissionschema.index({ paymentProof: 1 }, { unique: true, sparse: true });
 commissionschema.index({ auction: 1, createdAt: -1 });

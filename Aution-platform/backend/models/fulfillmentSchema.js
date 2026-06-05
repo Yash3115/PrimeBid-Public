@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const deliveryAddressSchema = new mongoose.Schema(
   {
@@ -181,6 +182,8 @@ const fulfillmentSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+fulfillmentSchema.plugin(demoScopedModel);
 
 fulfillmentSchema.index({ bidder: 1, updatedAt: -1 });
 fulfillmentSchema.index({ seller: 1, status: 1, updatedAt: -1 });

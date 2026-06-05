@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const platformTransactionSchema = new mongoose.Schema(
     {
@@ -59,6 +60,8 @@ const platformTransactionSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+platformTransactionSchema.plugin(demoScopedModel);
 
 platformTransactionSchema.index({ platformAccount: 1, createdAt: -1 });
 platformTransactionSchema.index({ auction: 1, createdAt: -1 });

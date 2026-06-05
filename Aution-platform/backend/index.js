@@ -13,10 +13,12 @@ import superAdminRoutes from "./routes/superAdminRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import cronRoutes from "./routes/cronRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
+import demoRoutes from "./routes/demoRoutes.js";
 import { endedAuctionCron } from "./automation/endedAuctionCron.js";
 import { requireTrustedOrigin, securityHeaders } from "./middlewares/security.js";
 import { isAllowedOrigin } from "./utils/origin.js";
 import { buildDemoMarketplaceResponse } from "./utils/demoMarketplace.js";
+import { createDemoRequestContext } from "./utils/demoScope.js";
 
 dotenv.config();
 const app=express();
@@ -41,6 +43,7 @@ app.use(requireTrustedOrigin);
 app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended:true, limit: "1mb" }));
+app.use(createDemoRequestContext);
 app.use(fileUpload({
     useTempFiles: true,
     tempFileDir: os.tmpdir(),
@@ -101,6 +104,7 @@ app.use("/api/v1/superadmin", requireDatabaseConnection, superAdminRoutes);
 app.use("/api/v1/ai", requireDatabaseConnection, aiRoutes);
 app.use("/api/v1/cron", requireDatabaseConnection, cronRoutes);
 app.use("/api/v1/wallet", requireDatabaseConnection, walletRoutes);
+app.use("/api/v1/demo", requireDatabaseConnection, demoRoutes);
 
 app.use((req, res, next) => {
     const err = new Error(`Route not found: ${req.originalUrl}`);

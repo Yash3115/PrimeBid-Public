@@ -8,8 +8,10 @@ import {
 } from "react-router-dom";
 import SideDrawer from "./layout/SideDrawer";
 import ErrorBoundary from "./custom-components/ErrorBoundary";
+import ProtectedRoute from "./custom-components/ProtectedRoute";
 import RouteUtilities from "./custom-components/RouteUtilities";
 import Spinner from "./custom-components/Spinner";
+import DemoModeBanner from "./custom-components/DemoModeBanner";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useDispatch, useSelector } from "react-redux";
@@ -24,6 +26,7 @@ import { getAllAuctionItems } from "./store/slices/auctionSlice";
 import { fetchWallet, resetWallet } from "./store/slices/walletSlice";
 import { AUTH_SESSION_EXPIRED_EVENT } from "./lib/authEvents";
 import { clearAuthToken } from "./lib/authToken";
+import { clearDemoConversion } from "./lib/demoMode";
 
 const Home = lazy(() => import("./pages/Home"));
 const SignUp = lazy(() => import("./pages/SignUp"));
@@ -52,7 +55,6 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 const protectedRoutePrefixes = [
   "/auction/details/",
-  "/auction/item/",
   "/create-auction",
   "/dashboard",
   "/bidder-dashboard",
@@ -92,6 +94,7 @@ const SessionExpiredHandler = () => {
       }
 
       clearAuthToken();
+      clearDemoConversion();
       dispatch(sessionExpired());
       dispatch(resetWallet());
       toast.error(message, { toastId: "session-expired" });
@@ -142,35 +145,131 @@ const App = () => {
     <Router>
       <SessionExpiredHandler />
       <RouteUtilities />
+      <a
+        href="#main-content"
+        className="sr-only fixed left-4 top-4 z-[80] rounded-md bg-slate-950 px-4 py-3 font-semibold text-white shadow-lg focus:not-sr-only"
+      >
+        Skip to main content
+      </a>
       <SideDrawer />
+      <DemoModeBanner />
       <ErrorBoundary>
         <Suspense fallback={<Spinner />}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/sign-up" element={<SignUp />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/logout" element={<Logout />} />
-            <Route path="/how-it-works-info" element={<HowItWorks />} />
-            <Route path="/about" element={<About />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/watchlist" element={<Watchlist />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/recently-viewed" element={<RecentlyViewed />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/won-auctions" element={<WonAuctions />} />
-            <Route path="/seller-dashboard" element={<SellerDashboard />} />
-            <Route path="/bidder-dashboard" element={<BidderDashboard />} />
-            <Route path="/kyc-verification" element={<KycVerification />} />
-            <Route path="/auctions" element={<Auctions />} />
-            <Route path="/auction/item/:id" element={<AuctionItem />} />
-            <Route path="/create-auction" element={<CreateAuction />} />
-            <Route path="/view-my-auctions" element={<ViewMyAuctions />} />
-            <Route path="/auction/details/:id" element={<ViewAuctionDetails />} />
-            <Route path="/dashboard" element={<RoleDashboard />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="/me" element={<UserProfile />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <main id="main-content" tabIndex={-1}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/sign-up" element={<SignUp />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/logout" element={<Logout />} />
+              <Route path="/how-it-works-info" element={<HowItWorks />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/leaderboard" element={<Leaderboard />} />
+              <Route path="/auctions" element={<Auctions />} />
+              <Route path="/recently-viewed" element={<RecentlyViewed />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route
+                path="/watchlist"
+                element={
+                  <ProtectedRoute>
+                    <Watchlist />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/wallet"
+                element={
+                  <ProtectedRoute>
+                    <Wallet />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/notifications"
+                element={
+                  <ProtectedRoute>
+                    <Notifications />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/won-auctions"
+                element={
+                  <ProtectedRoute allowedRoles={["Bidder"]}>
+                    <WonAuctions />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/seller-dashboard"
+                element={
+                  <ProtectedRoute allowedRoles={["Auctioneer"]}>
+                    <SellerDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/bidder-dashboard"
+                element={
+                  <ProtectedRoute allowedRoles={["Bidder"]}>
+                    <BidderDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/kyc-verification"
+                element={
+                  <ProtectedRoute allowedRoles={["Auctioneer"]}>
+                    <KycVerification />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/auction/item/:id"
+                element={<AuctionItem />}
+              />
+              <Route
+                path="/create-auction"
+                element={
+                  <ProtectedRoute allowedRoles={["Auctioneer"]}>
+                    <CreateAuction />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/view-my-auctions"
+                element={
+                  <ProtectedRoute allowedRoles={["Auctioneer"]}>
+                    <ViewMyAuctions />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/auction/details/:id"
+                element={
+                  <ProtectedRoute allowedRoles={["Auctioneer", "Super Admin"]}>
+                    <ViewAuctionDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <RoleDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/me"
+                element={
+                  <ProtectedRoute>
+                    <UserProfile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
         </Suspense>
       </ErrorBoundary>
       <ToastContainer position="top-right" />

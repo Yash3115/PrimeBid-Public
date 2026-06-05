@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { formatCurrency } from "@/lib/format";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { RiAuctionFill } from "react-icons/ri";
 import { MdLeaderboard } from "react-icons/md";
 import { ArrowDownToLine, ArrowUpFromLine, Gavel, ShieldCheck, X } from "lucide-react";
+import { exitDemo, startDemo } from "@/store/slices/userSlice";
 import {
   BiBarChartSquare,
   BiBell,
@@ -30,8 +31,11 @@ const roleLinkBase =
   "inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition";
 
 const SideDrawer = () => {
+  const demoEnabled = import.meta.env.VITE_DEMO_MODE_ENABLED !== "false";
   const [show, setShow] = useState(false);
   const location = useLocation();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { isAuthenticated, user, unreadNotifications } = useSelector(
     (state) => state.user
   );
@@ -39,6 +43,7 @@ const SideDrawer = () => {
   const canDeposit = user?.role === "Bidder";
   const canWithdraw = ["Auctioneer", "Bidder"].includes(user?.role);
   const showWalletCard = isAuthenticated && (canDeposit || canWithdraw);
+  const isDemo = Boolean(user?.isDemo);
   const availableBalance = Number(
     wallet.availableBalance ?? user?.wallet?.availableBalance ?? 0
   );
@@ -86,6 +91,18 @@ const SideDrawer = () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [show]);
+
+  const handleExitDemo = async () => {
+    await dispatch(exitDemo());
+    navigate("/", { replace: true });
+  };
+
+  const handleStartDemo = async () => {
+    const result = await dispatch(startDemo("Bidder"));
+    if (result?.success) {
+      navigate(result.demo?.dashboardPath || "/bidder-dashboard");
+    }
+  };
 
   return (
     <>
@@ -286,6 +303,11 @@ const SideDrawer = () => {
                   <span className="truncate text-sm font-semibold text-slate-950">
                   {user?.userName}
                 </span>
+                  {isDemo && (
+                    <span className="ml-auto rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                      Demo
+                    </span>
+                  )}
                 </div>
                 <Link to="/wallet" className={getNavClass("/wallet")}>
                   <BiWallet /> Wallet
@@ -293,9 +315,19 @@ const SideDrawer = () => {
                 <Link to="/me" className={getNavClass("/me")}>
                   <BiCog /> Profile
                 </Link>
-                <Link to="/logout" className={getNavClass("/logout")}>
-                  <BiLogOut /> Logout
-                </Link>
+                {isDemo ? (
+                  <button
+                    type="button"
+                    onClick={handleExitDemo}
+                    className={`${navLinkBase} text-left text-slate-700 hover:bg-slate-100 hover:text-indigo-700`}
+                  >
+                    <BiLogOut /> Exit demo
+                  </button>
+                ) : (
+                  <Link to="/logout" className={getNavClass("/logout")}>
+                    <BiLogOut /> Logout
+                  </Link>
+                )}
               </div>
             </>
           ) : (
@@ -309,6 +341,15 @@ const SideDrawer = () => {
               <Link to="/sign-up" className={getNavClass("/sign-up")}>
                 <BiUserPlus /> Sign Up
               </Link>
+              {demoEnabled && (
+                <button
+                  type="button"
+                  onClick={handleStartDemo}
+                  className={`${navLinkBase} text-left text-amber-800 hover:bg-amber-50 hover:text-amber-900`}
+                >
+                  <RiAuctionFill /> Try Demo
+                </button>
+              )}
             </div>
           )}
 

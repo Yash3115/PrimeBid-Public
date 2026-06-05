@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const bidSchema = new mongoose.Schema({
     amount: Number,
@@ -26,6 +27,8 @@ const bidSchema = new mongoose.Schema({
         default:false
     }
 }, { timestamps: true })
+
+bidSchema.plugin(demoScopedModel);
 
 bidSchema.index({ auctionItem: 1, "bidder.id": 1 }, { unique: true });
 bidSchema.index({ auctionItem: 1, amount: -1 });

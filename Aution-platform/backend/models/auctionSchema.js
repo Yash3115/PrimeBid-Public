@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const auctionschema = new mongoose.Schema({
     title:{
@@ -129,6 +130,8 @@ const auctionschema = new mongoose.Schema({
         default:false
     },
 }, { timestamps: true })
+
+auctionschema.plugin(demoScopedModel);
 
 auctionschema.index({ status: 1, startTime: 1, endTime: 1 });
 auctionschema.index({ createdBy: 1, status: 1, endTime: -1 });

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const walletTransactionSchema = new mongoose.Schema(
     {
@@ -75,6 +76,8 @@ const walletTransactionSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+walletTransactionSchema.plugin(demoScopedModel);
 
 walletTransactionSchema.index({ user: 1, createdAt: -1 });
 walletTransactionSchema.index({ auction: 1, type: 1, createdAt: -1 });

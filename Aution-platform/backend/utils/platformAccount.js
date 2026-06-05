@@ -1,8 +1,15 @@
 import PlatformAccount from "../models/platformAccountSchema.js";
 import PlatformTransaction from "../models/platformTransactionSchema.js";
 import { applySession, createOne } from "./mongoTransaction.js";
+import { getDemoScope } from "./demoScope.js";
 
 const PLATFORM_ACCOUNT_KEY = "primary";
+const getPlatformAccountKey = () => {
+    const scope = getDemoScope();
+    return scope?.isDemo && scope.demoSessionId
+        ? `demo:${scope.demoSessionId}`
+        : PLATFORM_ACCOUNT_KEY;
+};
 
 export const getPlatformSnapshot = (account) => ({
     availableBalance: Number(account?.availableBalance || 0),
@@ -11,12 +18,14 @@ export const getPlatformSnapshot = (account) => ({
     lifetimeWithdrawn: Number(account?.lifetimeWithdrawn || 0),
 });
 
-export const getOrCreatePlatformAccount = async (session) =>
-    PlatformAccount.findOneAndUpdate(
-        { key: PLATFORM_ACCOUNT_KEY },
-        { $setOnInsert: { key: PLATFORM_ACCOUNT_KEY } },
+export const getOrCreatePlatformAccount = async (session) => {
+    const key = getPlatformAccountKey();
+    return PlatformAccount.findOneAndUpdate(
+        { key },
+        { $setOnInsert: { key } },
         { new: true, upsert: true, setDefaultsOnInsert: true, session }
     );
+};
 
 const buildCommissionLookup = ({ auctionId, bidId, paymentProofId, manual }) => {
     if (manual && paymentProofId) {

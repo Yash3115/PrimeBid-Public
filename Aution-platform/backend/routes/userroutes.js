@@ -19,7 +19,7 @@ import {
     reportFulfillmentIssue,
     submitDeliveryAddress,
 } from "../controllers/fulfillmentController.js";
-import { isAuth } from '../middlewares/auth.js';
+import { isAuth, optionalAuth } from '../middlewares/auth.js';
 const router = express.Router();
 
 router.post("/register",register);
@@ -27,7 +27,7 @@ router.post("/login",login);
 router.post("/google-login",googleLogin);
 router.get("/logout",logout);
 router.get("/me",isAuth,getUserprofile);
-router.get("/leaderboard", fetchLeaderboard);
+router.get("/leaderboard", optionalAuth, fetchLeaderboard);
 router.get("/watchlist", isAuth, getWatchlist);
 router.post("/watchlist/:id", isAuth, addToWatchlist);
 router.delete("/watchlist/:id", isAuth, removeFromWatchlist);

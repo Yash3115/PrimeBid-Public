@@ -7,6 +7,7 @@ import Notification from "../models/notificationSchema.js";
 
 import { createNotification } from "../utils/notifications.js";
 import { closeEndedAuctions } from "../utils/auctionClosing.js";
+import { cleanupExpiredDemoSessions } from "../utils/demoMode.js";
 
 export const runEndedAuctionTasks = async () => {
   const now = new Date();
@@ -51,12 +52,14 @@ export const runEndedAuctionTasks = async () => {
     reason: "cron",
     limit: 100,
   });
+  const demoCleanup = await cleanupExpiredDemoSessions({ now });
 
   return {
     endingSoonCount: endingSoonAuctions.length,
     endedCount: closeResult.closedCount,
     attemptedCloseCount: closeResult.attemptedCount,
     failedCloseCount: closeResult.failedCount,
+    demoExpiredSessionCount: demoCleanup.expiredSessionCount,
   };
 };
 

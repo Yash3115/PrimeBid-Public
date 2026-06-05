@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { demoScopedModel } from "./plugins/demoScopedModel.js";
 
 const reviewSchema = new mongoose.Schema(
     {
@@ -31,6 +32,8 @@ const reviewSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
+
+reviewSchema.plugin(demoScopedModel);
 
 reviewSchema.index({ auction: 1, reviewer: 1 }, { unique: true });
 reviewSchema.index({ seller: 1, createdAt: -1 });
