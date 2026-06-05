@@ -1,5 +1,11 @@
 import { AsyncLocalStorage } from "async_hooks";
 import mongoose from "mongoose";
+import {
+  DATABASE_MODES,
+  getConnectionInstance,
+  isDemoDatabaseAvailable,
+  normalizeDatabaseMode,
+} from "../db/connection.js";
 
 const demoScopeStorage = new AsyncLocalStorage();
 
@@ -12,7 +18,7 @@ const toObjectId = (value) => {
   return undefined;
 };
 
-export const isDemoModeEnabled = () => process.env.DEMO_MODE_ENABLED === "true";
+export const isDemoModeEnabled = () => isDemoDatabaseAvailable();
 
 export const getDemoSessionTtlHours = () => {
   const hours = Number(process.env.DEMO_SESSION_TTL_HOURS || 24);
@@ -27,6 +33,7 @@ export const getDemoMaxSessionsPerSourcePerHour = () => {
 export const createDemoRequestContext = (req, res, next) => {
   demoScopeStorage.run(
     {
+      databaseMode: DATABASE_MODES.PRODUCTION,
       isDemo: false,
       demoSessionId: null,
       demoExpiresAt: null,
@@ -38,10 +45,22 @@ export const createDemoRequestContext = (req, res, next) => {
 
 export const getDemoScope = () => demoScopeStorage.getStore() || {};
 
+export const getDatabaseMode = () =>
+  normalizeDatabaseMode(getDemoScope().databaseMode);
+
+export const setDatabaseMode = (mode) => {
+  const store = demoScopeStorage.getStore();
+  if (!store) return;
+  store.databaseMode = normalizeDatabaseMode(mode);
+};
+
+export const getScopedConnection = () => getConnectionInstance(getDatabaseMode());
+
 export const setDemoScope = ({ isDemo, demoSessionId, demoExpiresAt }) => {
   const store = demoScopeStorage.getStore();
   if (!store) return;
 
+  store.databaseMode = isDemo ? DATABASE_MODES.DEMO : DATABASE_MODES.PRODUCTION;
   store.isDemo = Boolean(isDemo);
   store.demoSessionId = demoSessionId ? String(demoSessionId) : null;
   store.demoExpiresAt = demoExpiresAt ? new Date(demoExpiresAt) : null;
@@ -51,6 +70,7 @@ export const clearDemoScope = () => {
   const store = demoScopeStorage.getStore();
   if (!store) return;
 
+  store.databaseMode = DATABASE_MODES.PRODUCTION;
   store.isDemo = false;
   store.demoSessionId = null;
   store.demoExpiresAt = null;
@@ -59,6 +79,9 @@ export const clearDemoScope = () => {
 export const runWithDemoScope = (scope, operation) =>
   demoScopeStorage.run(
     {
+      databaseMode: normalizeDatabaseMode(
+        scope?.databaseMode || (scope?.isDemo ? DATABASE_MODES.DEMO : getDatabaseMode())
+      ),
       isDemo: Boolean(scope?.isDemo),
       demoSessionId: scope?.demoSessionId ? String(scope.demoSessionId) : null,
       demoExpiresAt: scope?.demoExpiresAt ? new Date(scope.demoExpiresAt) : null,
@@ -68,7 +91,28 @@ export const runWithDemoScope = (scope, operation) =>
   );
 
 export const runWithoutDemoScope = (operation) =>
-  runWithDemoScope({ bypassDemoScope: true }, operation);
+  runWithDemoScope(
+    { databaseMode: getDatabaseMode(), bypassDemoScope: true },
+    operation
+  );
+
+export const runWithDatabaseMode = (databaseMode, operation, options = {}) =>
+  runWithDemoScope(
+    {
+      databaseMode,
+      isDemo: options.isDemo,
+      demoSessionId: options.demoSessionId,
+      demoExpiresAt: options.demoExpiresAt,
+      bypassDemoScope: options.bypassDemoScope,
+    },
+    operation
+  );
+
+export const runWithDemoDatabase = (operation, options = {}) =>
+  runWithDatabaseMode(DATABASE_MODES.DEMO, operation, options);
+
+export const runWithProductionDatabase = (operation, options = {}) =>
+  runWithDatabaseMode(DATABASE_MODES.PRODUCTION, operation, options);
 
 export const getCurrentDemoMetadata = () => {
   const scope = getDemoScope();
@@ -92,9 +136,9 @@ export const getDemoScopeFilter = () => {
     };
   }
 
-  return {
-    isDemo: { $ne: true },
-  };
+  return getDatabaseMode() === DATABASE_MODES.DEMO
+    ? { isDemo: true }
+    : { isDemo: { $ne: true } };
 };
 
 export const attachDemoMetadata = (doc) => {

@@ -31,6 +31,7 @@ import { clearDemoConversion } from "./lib/demoMode";
 const Home = lazy(() => import("./pages/Home"));
 const SignUp = lazy(() => import("./pages/SignUp"));
 const Login = lazy(() => import("./pages/Login"));
+const Demo = lazy(() => import("./pages/Demo"));
 const HowItWorks = lazy(() => import("./pages/HowItWorks"));
 const About = lazy(() => import("./pages/About"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
@@ -160,6 +161,7 @@ const App = () => {
               <Route path="/" element={<Home />} />
               <Route path="/sign-up" element={<SignUp />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/demo" element={<Demo />} />
               <Route path="/logout" element={<Logout />} />
               <Route path="/how-it-works-info" element={<HowItWorks />} />
               <Route path="/about" element={<About />} />

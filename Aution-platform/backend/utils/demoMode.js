@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import { connection, DATABASE_MODES } from "../db/connection.js";
 import Auction from "../models/auctionSchema.js";
 import AuditLog from "../models/auditLogSchema.js";
 import Bid from "../models/bidSchema.js";
@@ -21,8 +22,9 @@ import {
   getDemoMaxSessionsPerSourcePerHour,
   getDemoSessionTtlHours,
   isDemoModeEnabled,
+  runWithDemoDatabase,
+  runWithProductionDatabase,
   runWithDemoScope,
-  runWithoutDemoScope,
 } from "./demoScope.js";
 import { createNotification } from "./notifications.js";
 
@@ -101,7 +103,7 @@ const getCookieOptions = (expires) => {
   };
 };
 
-export const issueDemoAuthToken = ({ user, demoSession, res }) => {
+export const issueDemoAuthToken = ({ user, demoSession, persona, res }) => {
   const expiresAt = new Date(demoSession.expiresAt);
   const expiresIn = Math.max(
     60,
@@ -110,20 +112,22 @@ export const issueDemoAuthToken = ({ user, demoSession, res }) => {
   const token = jwt.sign(
     {
       id: user._id,
+      mode: DATABASE_MODES.DEMO,
       isDemo: true,
       demoSessionId: demoSession._id,
+      demoPersona: normalizeDemoPersona(persona || user.role),
       demoExpiresAt: expiresAt.toISOString(),
     },
     process.env.JWT_SECRET,
     { expiresIn }
   );
 
-  res.cookie("token", token, getCookieOptions(expiresAt));
+  res.cookie("demoToken", token, getCookieOptions(expiresAt));
   return token;
 };
 
 export const clearDemoAuthCookie = (res) => {
-  res.cookie("token", null, getCookieOptions(new Date(Date.now())));
+  res.cookie("demoToken", null, getCookieOptions(new Date(Date.now())));
 };
 
 const buildPhone = () => `8${crypto.randomInt(100000000, 999999999)}`;
@@ -668,109 +672,134 @@ export const startDemoSession = async ({ req, persona }) => {
     throw err;
   }
 
-  const ipHash = hashValue(getRequestIp(req));
-  const userAgentHash = hashValue(req.get?.("user-agent") || "");
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const sessionCount = await DemoSession.countDocuments({
-    ipHash,
-    createdAt: { $gte: oneHourAgo },
-  });
-  if (sessionCount >= getDemoMaxSessionsPerSourcePerHour()) {
-    const err = new Error("Too many demo sessions started from this network. Please try again later.");
-    err.statusCode = 429;
-    throw err;
-  }
+  await connection(DATABASE_MODES.DEMO);
 
-  const conversionToken = crypto.randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + getDemoSessionTtlHours() * 60 * 60 * 1000);
-  const demoSession = await DemoSession.create({
-    expiresAt,
-    status: "Active",
-    conversionTokenHash: hashValue(conversionToken),
-    ipHash,
-    userAgentHash,
-  });
+  return runWithDemoDatabase(async () => {
+    const ipHash = hashValue(getRequestIp(req));
+    const userAgentHash = hashValue(req.get?.("user-agent") || "");
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const sessionCount = await DemoSession.countDocuments({
+      ipHash,
+      createdAt: { $gte: oneHourAgo },
+    });
+    if (sessionCount >= getDemoMaxSessionsPerSourcePerHour()) {
+      const err = new Error("Too many demo sessions started from this network. Please try again later.");
+      err.statusCode = 429;
+      throw err;
+    }
 
-  const personas = await runWithDemoScope(
-    {
-      isDemo: true,
-      demoSessionId: demoSession._id,
-      demoExpiresAt: expiresAt,
-    },
-    () => createDemoFixtures({ demoSession })
-  );
+    const conversionToken = crypto.randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + getDemoSessionTtlHours() * 60 * 60 * 1000);
+    const demoSession = await DemoSession.create({
+      expiresAt,
+      status: "Active",
+      conversionTokenHash: hashValue(conversionToken),
+      ipHash,
+      userAgentHash,
+    });
 
-  const selectedPersona = normalizeDemoPersona(persona);
-  const user =
-    selectedPersona === DEMO_PERSONAS.AUCTIONEER
-      ? personas.auctioneer
-      : selectedPersona === DEMO_PERSONAS.SUPER_ADMIN
-        ? personas.admin
-        : personas.bidder;
+    const personas = await runWithDemoScope(
+      {
+        databaseMode: DATABASE_MODES.DEMO,
+        isDemo: true,
+        demoSessionId: demoSession._id,
+        demoExpiresAt: expiresAt,
+      },
+      () => createDemoFixtures({ demoSession })
+    );
 
-  return {
-    demoSession,
-    user,
-    persona: selectedPersona,
-    conversionToken,
-  };
+    const selectedPersona = normalizeDemoPersona(persona);
+    const user =
+      selectedPersona === DEMO_PERSONAS.AUCTIONEER
+        ? personas.auctioneer
+        : selectedPersona === DEMO_PERSONAS.SUPER_ADMIN
+          ? personas.admin
+          : personas.bidder;
+
+    return {
+      demoSession,
+      user,
+      persona: selectedPersona,
+      conversionToken,
+    };
+  }, { bypassDemoScope: true });
 };
 
 export const switchDemoPersona = async ({ demoSessionId, persona }) => {
-  const selectedPersona = normalizeDemoPersona(persona);
-  const demoSession = await DemoSession.findOne({
-    _id: demoSessionId,
-    status: "Active",
-    expiresAt: { $gt: new Date() },
-  });
-  if (!demoSession) {
-    const err = new Error("Demo session expired. Please start a new demo.");
-    err.statusCode = 401;
-    throw err;
-  }
+  await connection(DATABASE_MODES.DEMO);
 
-  const userId = demoSession.personaUserIds?.[selectedPersona];
-  if (!userId) {
-    const err = new Error("Demo persona is unavailable");
-    err.statusCode = 404;
-    throw err;
-  }
+  return runWithDemoDatabase(async () => {
+    const selectedPersona = normalizeDemoPersona(persona);
+    const demoSession = await DemoSession.findOne({
+      _id: demoSessionId,
+      status: "Active",
+      expiresAt: { $gt: new Date() },
+    });
+    if (!demoSession) {
+      const err = new Error("Demo session expired. Please start a new demo.");
+      err.statusCode = 401;
+      throw err;
+    }
 
-  const user = await runWithDemoScope(
-    {
-      isDemo: true,
-      demoSessionId: demoSession._id,
-      demoExpiresAt: demoSession.expiresAt,
-    },
-    () => User.findById(userId)
-  );
-  if (!user) {
-    const err = new Error("Demo persona is unavailable");
-    err.statusCode = 404;
-    throw err;
-  }
+    const userId = demoSession.personaUserIds?.[selectedPersona];
+    if (!userId) {
+      const err = new Error("Demo persona is unavailable");
+      err.statusCode = 404;
+      throw err;
+    }
 
-  return {
-    demoSession,
-    user,
-    persona: selectedPersona,
-  };
+    const user = await runWithDemoScope(
+      {
+        databaseMode: DATABASE_MODES.DEMO,
+        isDemo: true,
+        demoSessionId: demoSession._id,
+        demoExpiresAt: demoSession.expiresAt,
+      },
+      () => User.findById(userId)
+    );
+    if (!user) {
+      const err = new Error("Demo persona is unavailable");
+      err.statusCode = 404;
+      throw err;
+    }
+
+    return {
+      demoSession,
+      user,
+      persona: selectedPersona,
+    };
+  }, { bypassDemoScope: true });
 };
 
 export const endDemoSession = async (demoSessionId) => {
   if (!mongoose.Types.ObjectId.isValid(demoSessionId)) return null;
-  return DemoSession.findByIdAndUpdate(
-    demoSessionId,
-    {
-      status: "Ended",
-      endedAt: new Date(),
-    },
-    { new: true }
+  await connection(DATABASE_MODES.DEMO);
+  return runWithDemoDatabase(
+    () =>
+      DemoSession.findByIdAndUpdate(
+        demoSessionId,
+        {
+          status: "Ended",
+          endedAt: new Date(),
+        },
+        { new: true }
+      ),
+    { bypassDemoScope: true }
   );
 };
 
-export const cleanupExpiredDemoSessions = async ({ now = new Date() } = {}) =>
-  runWithoutDemoScope(async () => {
+export const cleanupExpiredDemoSessions = async ({ now = new Date() } = {}) => {
+  if (!isDemoModeEnabled()) {
+    return {
+      expiredSessionCount: 0,
+      deletionResults: {},
+      skipped: "Demo database is not configured",
+    };
+  }
+
+  await connection(DATABASE_MODES.DEMO);
+
+  return runWithDemoDatabase(async () => {
     const expiredSessions = await DemoSession.find({
       $or: [
         { expiresAt: { $lte: now } },
@@ -801,7 +830,8 @@ export const cleanupExpiredDemoSessions = async ({ now = new Date() } = {}) =>
       expiredSessionCount: sessionIds.length,
       deletionResults,
     };
-  });
+  }, { bypassDemoScope: true });
+};
 
 export const convertDemoWatchlist = async ({
   realUser,
@@ -814,12 +844,18 @@ export const convertDemoWatchlist = async ({
     throw err;
   }
 
-  const demoSession = await DemoSession.findOne({
-    _id: demoSessionId,
-    conversionTokenHash: hashValue(conversionToken),
-    status: "Active",
-    expiresAt: { $gt: new Date() },
-  }).select("+conversionTokenHash");
+  await connection(DATABASE_MODES.DEMO);
+
+  const demoSession = await runWithDemoDatabase(
+    () =>
+      DemoSession.findOne({
+        _id: demoSessionId,
+        conversionTokenHash: hashValue(conversionToken),
+        status: "Active",
+        expiresAt: { $gt: new Date() },
+      }).select("+conversionTokenHash"),
+    { bypassDemoScope: true }
+  );
 
   if (!demoSession) {
     const err = new Error("Demo conversion token is invalid or expired");
@@ -836,6 +872,7 @@ export const convertDemoWatchlist = async ({
 
   const demoBidder = await runWithDemoScope(
     {
+      databaseMode: DATABASE_MODES.DEMO,
       isDemo: true,
       demoSessionId: demoSession._id,
       demoExpiresAt: demoSession.expiresAt,
@@ -861,14 +898,16 @@ export const convertDemoWatchlist = async ({
     };
   }
 
-  const realAuctions = await Auction.find({
-    status: { $ne: "Draft" },
-    category: { $in: categories },
-    endTime: { $gt: new Date() },
-  })
-    .select("_id")
-    .sort({ endTime: 1 })
-    .limit(12);
+  const realAuctions = await runWithProductionDatabase(() =>
+    Auction.find({
+      status: { $ne: "Draft" },
+      category: { $in: categories },
+      endTime: { $gt: new Date() },
+    })
+      .select("_id")
+      .sort({ endTime: 1 })
+      .limit(12)
+  );
 
   if (!realAuctions.length) {
     return {
@@ -877,13 +916,17 @@ export const convertDemoWatchlist = async ({
     };
   }
 
-  await User.findByIdAndUpdate(realUser._id, {
-    $addToSet: {
-      watchlist: { $each: realAuctions.map((auction) => auction._id) },
-    },
-  });
+  await runWithProductionDatabase(() =>
+    User.findByIdAndUpdate(realUser._id, {
+      $addToSet: {
+        watchlist: { $each: realAuctions.map((auction) => auction._id) },
+      },
+    })
+  );
 
-  const updatedUser = await User.findById(realUser._id).populate("watchlist");
+  const updatedUser = await runWithProductionDatabase(() =>
+    User.findById(realUser._id).populate("watchlist")
+  );
   return {
     copiedCount: realAuctions.length,
     watchlist: updatedUser.watchlist || [],

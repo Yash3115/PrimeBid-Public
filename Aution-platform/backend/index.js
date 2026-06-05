@@ -3,7 +3,7 @@ import cors from "cors";
 import cookieParser from 'cookie-parser';
 import fileUpload from 'express-fileupload';
 import os from "os";
-import { connection, getConnectionStatus } from './db/connection.js';
+import { connection, DATABASE_MODES } from './db/connection.js';
 import dotenv from 'dotenv';
 import userroute from "./routes/userroutes.js";
 import errorMiddleware from './middlewares/error.js';
@@ -15,6 +15,11 @@ import cronRoutes from "./routes/cronRoutes.js";
 import walletRoutes from "./routes/walletRoutes.js";
 import demoRoutes from "./routes/demoRoutes.js";
 import { endedAuctionCron } from "./automation/endedAuctionCron.js";
+import {
+    getReadinessSnapshot,
+    requireDatabaseConnection,
+    requireProductionDatabase,
+} from "./middlewares/database.js";
 import { requireTrustedOrigin, securityHeaders } from "./middlewares/security.js";
 import { isAllowedOrigin } from "./utils/origin.js";
 import { buildDemoMarketplaceResponse } from "./utils/demoMarketplace.js";
@@ -63,33 +68,22 @@ app.get("/health",(req,res)=>{
 })
 
 app.get("/ready",(req,res)=>{
-    const database = getConnectionStatus();
-    res.status(database.connected ? 200 : 503).json({
-        success: database.connected,
-        status: database.connected ? "ready" : "not_ready",
-        database: database.connected ? "connected" : "disconnected",
-        error: database.connected ? null : "Database temporarily unavailable",
+    const readiness = getReadinessSnapshot();
+    res.status(readiness.production.connected ? 200 : 503).json({
+        success: readiness.production.connected,
+        status: readiness.production.connected ? "ready" : "not_ready",
+        database: readiness.production.connected ? "connected" : "disconnected",
+        databases: readiness,
+        error: readiness.production.connected ? null : "Database temporarily unavailable",
     });
 })
-
-const requireDatabaseConnection = async (req, res, next) => {
-    try {
-        await connection();
-        next();
-    } catch (error) {
-        console.error("Database unavailable for request:", error.message);
-        const err = new Error("Database temporarily unavailable. Please try again later.");
-        err.statusCode = 503;
-        next(err);
-    }
-};
 
 const allowDemoMarketplaceFallback =
     process.env.NODE_ENV !== "production" &&
     process.env.DISABLE_DEMO_MARKETPLACE_FALLBACK !== "true";
 
 app.get("/api/v1/auctionitem/allitems", (req, res, next) => {
-    const database = getConnectionStatus();
+    const database = getReadinessSnapshot().production;
     if (database.connected || !allowDemoMarketplaceFallback) {
         return next();
     }
@@ -97,14 +91,14 @@ app.get("/api/v1/auctionitem/allitems", (req, res, next) => {
     return res.status(200).json(buildDemoMarketplaceResponse());
 });
 
-app.use("/api/v1/user", requireDatabaseConnection, userroute)
-app.use("/api/v1/auctionitem", requireDatabaseConnection, auctionItemRoute)
-app.use("/api/v1/bid", requireDatabaseConnection, bidRoute);
-app.use("/api/v1/superadmin", requireDatabaseConnection, superAdminRoutes);
-app.use("/api/v1/ai", requireDatabaseConnection, aiRoutes);
-app.use("/api/v1/cron", requireDatabaseConnection, cronRoutes);
-app.use("/api/v1/wallet", requireDatabaseConnection, walletRoutes);
-app.use("/api/v1/demo", requireDatabaseConnection, demoRoutes);
+app.use("/api/v1/user", requireDatabaseConnection(), userroute)
+app.use("/api/v1/auctionitem", requireDatabaseConnection(), auctionItemRoute)
+app.use("/api/v1/bid", requireDatabaseConnection(), bidRoute);
+app.use("/api/v1/superadmin", requireDatabaseConnection(), superAdminRoutes);
+app.use("/api/v1/ai", requireDatabaseConnection(), aiRoutes);
+app.use("/api/v1/cron", requireProductionDatabase, cronRoutes);
+app.use("/api/v1/wallet", requireDatabaseConnection(), walletRoutes);
+app.use("/api/v1/demo", demoRoutes);
 
 app.use((req, res, next) => {
     const err = new Error(`Route not found: ${req.originalUrl}`);
@@ -122,7 +116,7 @@ if (shouldStartLocalServer) {
       console.log(`listening on http://localhost:${port}`);
   });
 
-  connection().then(() => {
+  connection(DATABASE_MODES.PRODUCTION).then(() => {
     endedAuctionCron();
   }).catch((error) => {
     console.error(

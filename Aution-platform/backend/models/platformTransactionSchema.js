@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const platformTransactionSchema = new mongoose.Schema(
     {
@@ -87,7 +88,7 @@ platformTransactionSchema.index(
     }
 );
 
-const PlatformTransaction = mongoose.model(
+const PlatformTransaction = createScopedModel(
     "PlatformTransaction",
     platformTransactionSchema
 );

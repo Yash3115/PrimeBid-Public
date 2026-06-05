@@ -73,6 +73,7 @@ Set these for the backend service:
 ```bash
 NODE_ENV=production
 MONGODB_URL=mongodb+srv://...
+DEMO_MONGODB_URL=mongodb+srv://.../primebid_demo
 JWT_SECRET=replace-with-a-long-random-secret
 COOKIE_EXPIRE=7
 COOKIE_SECURE=true
@@ -90,7 +91,7 @@ SMTP_FROM="PrimeBid <your-smtp-login@example.com>"
 AI_FEATURES_ENABLED=true
 GEMINI_MODEL=gemini-2.0-flash
 GEMINI_API_KEY=your-gemini-key
-DEMO_MODE_ENABLED=true
+DEMO_DISABLED=false
 DEMO_SESSION_TTL_HOURS=24
 DEMO_MAX_SESSIONS_PER_IP_PER_HOUR=20
 ADMIN_SEED_USERNAME=PrimeBid Admin
@@ -109,7 +110,8 @@ Notes:
 - Email delivery is used for auction-winner emails. Use either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT`. If `SMTP_HOST` is set, the backend uses host/port and ignores the service shortcut.
 - Common SMTP ports: `465` means SSL/TLS (`SMTP_SECURE=true`), while `587` means STARTTLS (`SMTP_SECURE=false`). Gmail typically requires an app password, not your normal password.
 - `ADMIN_SEED_*` variables are only used when running `npm run seed:admin`; the API does not create a default admin during normal startup.
-- Demo Mode is disabled unless `DEMO_MODE_ENABLED=true` is set on the backend. Demo users and records are tagged, isolated by session, and removed by TTL/cron cleanup.
+- Demo Mode runs alongside production when `DEMO_MONGODB_URL` is configured. It uses a separate MongoDB database, keeps per-visitor demo sessions isolated, and removes expired demo data by TTL/cron cleanup.
+- Set `DEMO_DISABLED=true` only when you need to hide/disable demo startup temporarily.
 
 ## Frontend Environment Variables
 
@@ -121,14 +123,13 @@ VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 VITE_EMAILJS_SERVICE_ID=your-emailjs-service-id
 VITE_EMAILJS_TEMPLATE_ID=your-emailjs-template-id
 VITE_EMAILJS_PUBLIC_KEY=your-emailjs-public-key
-VITE_DEMO_MODE_ENABLED=true
 ```
 
 If the frontend and backend are deployed behind the same domain with `/api/v1` routed to the backend, `VITE_API_BASE_URL` can be omitted and the app will use `/api/v1`.
 
 The EmailJS variables power the frontend Contact form. Configure the EmailJS service/template to accept the same template fields used by the app: `name`, `email`, `phone`, `subject`, and `message`.
 
-`VITE_DEMO_MODE_ENABLED=false` hides frontend Demo Mode entry points, but the backend env is the real security control.
+The `/demo` page and Try Demo links are available without a frontend env toggle. If the backend has no `DEMO_MONGODB_URL`, the demo page shows an unavailable state instead of changing production behavior.
 
 ## Vercel Deployment
 
@@ -214,6 +215,6 @@ Then verify from the frontend:
 - Auction does not settle after ending: run `/api/v1/cron/all` with the `Authorization` header and check backend logs.
 - Winner email does not send: verify `SMTP_MAIL`, `SMTP_PASSWORD`, and either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT` in the backend environment.
 - Contact form does not send: verify `VITE_EMAILJS_SERVICE_ID`, `VITE_EMAILJS_TEMPLATE_ID`, and `VITE_EMAILJS_PUBLIC_KEY` in the frontend environment, then rebuild/redeploy the frontend.
-- Demo Mode button fails: set backend `DEMO_MODE_ENABLED=true`, confirm `JWT_SECRET` is present, and redeploy both backend and frontend after env changes.
+- Demo Mode page says unavailable: set backend `DEMO_MONGODB_URL`, confirm `JWT_SECRET` is present, keep `DEMO_DISABLED` unset or `false`, then redeploy the backend.
 - Frontend refresh returns 404: confirm Vercel rewrites or Netlify redirects are active.
 - MongoDB connection fails: confirm the Atlas connection string, database user password, and Atlas network access settings.

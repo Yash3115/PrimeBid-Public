@@ -7,6 +7,14 @@ import {
   getDemoExpiryLabel,
   setDemoConversion,
 } from "../src/lib/demoMode.js";
+import {
+  AUTH_MODES,
+  clearAllAuthTokens,
+  getActiveAuthMode,
+  getAuthToken,
+  setActiveAuthMode,
+  setAuthToken,
+} from "../src/lib/authToken.js";
 
 test("demo helper maps personas to role dashboards", () => {
   assert.equal(getDemoDashboardPath("Bidder"), "/bidder-dashboard");
@@ -58,4 +66,37 @@ test("demo expiry labels are user-readable", () => {
   assert.match(getDemoExpiryLabel(threeHoursFromNow), /hours/);
   assert.match(getDemoExpiryLabel(tenMinutesFromNow), /minutes/);
   assert.equal(getDemoExpiryLabel("not-a-date"), "expires soon");
+});
+
+test("auth token helper keeps production and demo sessions separate", () => {
+  const storage = new Map();
+  const originalLocalStorage = globalThis.localStorage;
+
+  globalThis.localStorage = {
+    getItem: (key) => storage.get(key) || null,
+    setItem: (key, value) => storage.set(key, value),
+    removeItem: (key) => storage.delete(key),
+  };
+
+  try {
+    clearAllAuthTokens();
+    setAuthToken("production-token", AUTH_MODES.PRODUCTION);
+    setAuthToken("demo-token", AUTH_MODES.DEMO);
+
+    setActiveAuthMode(AUTH_MODES.PRODUCTION);
+    assert.equal(getActiveAuthMode(), AUTH_MODES.PRODUCTION);
+    assert.equal(getAuthToken(), "production-token");
+
+    setActiveAuthMode(AUTH_MODES.DEMO);
+    assert.equal(getActiveAuthMode(), AUTH_MODES.DEMO);
+    assert.equal(getAuthToken(), "demo-token");
+    assert.equal(getAuthToken(AUTH_MODES.PRODUCTION), "production-token");
+  } finally {
+    clearAllAuthTokens();
+    if (originalLocalStorage === undefined) {
+      delete globalThis.localStorage;
+    } else {
+      globalThis.localStorage = originalLocalStorage;
+    }
+  }
 });

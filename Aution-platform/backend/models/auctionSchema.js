@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const auctionschema = new mongoose.Schema({
     title:{
@@ -142,5 +143,5 @@ auctionschema.index({ status: 1, createdAt: -1 });
 auctionschema.index({ _id: 1, bidVersion: 1 });
 auctionschema.index({ status: 1, closureStatus: 1, endTime: 1 });
 
-const Auction = new mongoose.model("Auction",auctionschema);
+const Auction = createScopedModel("Auction", auctionschema);
 export default Auction;

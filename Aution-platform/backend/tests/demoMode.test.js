@@ -21,13 +21,15 @@ test("normalizes demo personas and dashboard destinations", () => {
   assert.equal(getDemoDashboardPath("Super Admin"), "/dashboard");
 });
 
-test("demo mode env helpers stay explicit and bounded", () => {
-  const originalEnabled = process.env.DEMO_MODE_ENABLED;
+test("demo mode env helpers use a separate demo database and bounded defaults", () => {
+  const originalDemoUrl = process.env.DEMO_MONGODB_URL;
+  const originalDemoDisabled = process.env.DEMO_DISABLED;
   const originalTtl = process.env.DEMO_SESSION_TTL_HOURS;
   const originalLimit = process.env.DEMO_MAX_SESSIONS_PER_IP_PER_HOUR;
 
   try {
-    process.env.DEMO_MODE_ENABLED = "true";
+    process.env.DEMO_MONGODB_URL = "mongodb://localhost:27017/primebid_demo_test";
+    delete process.env.DEMO_DISABLED;
     process.env.DEMO_SESSION_TTL_HOURS = "6";
     process.env.DEMO_MAX_SESSIONS_PER_IP_PER_HOUR = "3";
 
@@ -35,7 +37,7 @@ test("demo mode env helpers stay explicit and bounded", () => {
     assert.equal(getDemoSessionTtlHours(), 6);
     assert.equal(getDemoMaxSessionsPerSourcePerHour(), 3);
 
-    process.env.DEMO_MODE_ENABLED = "false";
+    process.env.DEMO_DISABLED = "true";
     process.env.DEMO_SESSION_TTL_HOURS = "-1";
     process.env.DEMO_MAX_SESSIONS_PER_IP_PER_HOUR = "0";
 
@@ -43,8 +45,10 @@ test("demo mode env helpers stay explicit and bounded", () => {
     assert.equal(getDemoSessionTtlHours(), 24);
     assert.equal(getDemoMaxSessionsPerSourcePerHour(), 20);
   } finally {
-    if (originalEnabled === undefined) delete process.env.DEMO_MODE_ENABLED;
-    else process.env.DEMO_MODE_ENABLED = originalEnabled;
+    if (originalDemoUrl === undefined) delete process.env.DEMO_MONGODB_URL;
+    else process.env.DEMO_MONGODB_URL = originalDemoUrl;
+    if (originalDemoDisabled === undefined) delete process.env.DEMO_DISABLED;
+    else process.env.DEMO_DISABLED = originalDemoDisabled;
     if (originalTtl === undefined) delete process.env.DEMO_SESSION_TTL_HOURS;
     else process.env.DEMO_SESSION_TTL_HOURS = originalTtl;
     if (originalLimit === undefined) delete process.env.DEMO_MAX_SESSIONS_PER_IP_PER_HOUR;

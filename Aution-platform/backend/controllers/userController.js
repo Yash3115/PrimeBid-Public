@@ -39,7 +39,7 @@ const getCookieOptions = (expires) => {
 const generatetoken = (id, res) => {
     const cookieExpireDays = Number(process.env.COOKIE_EXPIRE || 7);
     const token = jwt.sign(
-        { id: id },
+        { id: id, mode: "production" },
         process.env.JWT_SECRET,
         { expiresIn: `${cookieExpireDays}d` }
     );

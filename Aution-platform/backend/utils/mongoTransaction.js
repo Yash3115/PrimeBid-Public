@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import { getScopedConnection } from "./demoScope.js";
 
 const unsupportedTransactionPatterns = [
   /Transaction numbers are only allowed/i,
@@ -8,7 +8,7 @@ const unsupportedTransactionPatterns = [
 
 const shouldUseTransactions = () =>
   process.env.MONGO_TRANSACTIONS_ENABLED !== "false" &&
-  mongoose.connection.readyState === 1;
+  getScopedConnection().readyState === 1;
 
 export const applySession = (query, session) =>
   session ? query.session(session) : query;
@@ -32,7 +32,7 @@ export const runWithOptionalTransaction = async (
     return operation({ session: null, transactional: false });
   }
 
-  const session = await mongoose.startSession();
+  const session = await getScopedConnection().startSession();
   try {
     let result;
     await session.withTransaction(async () => {

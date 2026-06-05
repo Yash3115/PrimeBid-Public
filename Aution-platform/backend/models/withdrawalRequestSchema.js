@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const withdrawalRequestSchema = new mongoose.Schema(
     {
@@ -52,7 +53,7 @@ withdrawalRequestSchema.index(
     }
 );
 
-const WithdrawalRequest = mongoose.model(
+const WithdrawalRequest = createScopedModel(
     "WithdrawalRequest",
     withdrawalRequestSchema
 );

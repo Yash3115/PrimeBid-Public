@@ -9,7 +9,7 @@ const requestWith = ({ cookieToken, authorization } = {}) => ({
   },
 });
 
-test("auth middleware reads token from cookie first", () => {
+test("auth middleware prefers bearer token over cookie token", () => {
   const token = getRequestToken(
     requestWith({
       cookieToken: "cookie-token",
@@ -17,7 +17,7 @@ test("auth middleware reads token from cookie first", () => {
     })
   );
 
-  assert.equal(token, "cookie-token");
+  assert.equal(token, "header-token");
 });
 
 test("auth middleware accepts bearer token fallback", () => {

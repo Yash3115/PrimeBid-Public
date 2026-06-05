@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const commissionschema = new mongoose.Schema({
     amount:{
@@ -63,6 +64,6 @@ commissionschema.index({ platformTransaction: 1 }, { unique: true, sparse: true 
 commissionschema.index({ user: 1, createdAt: -1 });
 commissionschema.index({ collectionMethod: 1, createdAt: -1 });
 
-const Commission = new mongoose.model("Commission", commissionschema);
+const Commission = createScopedModel("Commission", commissionschema);
 
 export default Commission;

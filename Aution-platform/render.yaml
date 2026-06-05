@@ -20,6 +20,14 @@ services:
         sync: false
       - key: MONGODB_URL
         sync: false
+      - key: DEMO_MONGODB_URL
+        sync: false
+      - key: DEMO_SESSION_TTL_HOURS
+        value: "24"
+      - key: DEMO_MAX_SESSIONS_PER_IP_PER_HOUR
+        value: "20"
+      - key: DEMO_DISABLED
+        value: "false"
       - key: JWT_SECRET
         sync: false
       - key: CRON_SECRET

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const deliveryAddressSchema = new mongoose.Schema(
   {
@@ -191,6 +192,6 @@ fulfillmentSchema.index({ auction: 1, bidder: 1 });
 fulfillmentSchema.index({ "dispute.isOpen": 1, updatedAt: -1 });
 fulfillmentSchema.index({ settlementStatus: 1, updatedAt: -1 });
 
-const Fulfillment = mongoose.model("Fulfillment", fulfillmentSchema);
+const Fulfillment = createScopedModel("Fulfillment", fulfillmentSchema);
 
 export default Fulfillment;

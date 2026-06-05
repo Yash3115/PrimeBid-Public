@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const platformAccountSchema = new mongoose.Schema(
     {
@@ -35,7 +36,7 @@ const platformAccountSchema = new mongoose.Schema(
 
 platformAccountSchema.plugin(demoScopedModel);
 
-const PlatformAccount = mongoose.model(
+const PlatformAccount = createScopedModel(
     "PlatformAccount",
     platformAccountSchema
 );

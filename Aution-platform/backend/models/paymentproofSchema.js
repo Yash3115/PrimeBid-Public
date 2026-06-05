@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const paymentproofSchema = new mongoose.Schema({
     userId:{
@@ -34,5 +35,5 @@ paymentproofSchema.plugin(demoScopedModel);
 paymentproofSchema.index({ status: 1, createdAt: 1 });
 paymentproofSchema.index({ userId: 1, status: 1 });
 
-const Paymentproof = mongoose.model("Paymentproof",paymentproofSchema);
+const Paymentproof = createScopedModel("Paymentproof", paymentproofSchema);
 export default Paymentproof;

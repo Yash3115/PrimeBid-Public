@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const personaUserIdsSchema = new mongoose.Schema(
   {
@@ -54,6 +55,6 @@ const demoSessionSchema = new mongoose.Schema(
 demoSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 demoSessionSchema.index({ ipHash: 1, createdAt: -1 });
 
-const DemoSession = mongoose.model("DemoSession", demoSessionSchema);
+const DemoSession = createScopedModel("DemoSession", demoSessionSchema);
 
 export default DemoSession;

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const walletTransactionSchema = new mongoose.Schema(
     {
@@ -122,7 +123,7 @@ walletTransactionSchema.index(
     }
 );
 
-const WalletTransaction = mongoose.model(
+const WalletTransaction = createScopedModel(
     "WalletTransaction",
     walletTransactionSchema
 );

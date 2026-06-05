@@ -1,4 +1,4 @@
-import { googleLogin, login, startDemo } from "@/store/slices/userSlice";
+import { googleLogin, login } from "@/store/slices/userSlice";
 import { getSafeRedirectPath } from "@/lib/navigation";
 import { Eye, EyeOff, Lock, Mail, PlayCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -8,7 +8,6 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 const Login = () => {
-  const demoEnabled = import.meta.env.VITE_DEMO_MODE_ENABLED !== "false";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -77,13 +76,6 @@ const Login = () => {
     const result = await dispatch(login({ email, password }));
     if (result?.success) {
       navigate(redirectPath, { replace: true });
-    }
-  };
-
-  const handleStartDemo = async () => {
-    const result = await dispatch(startDemo("Bidder"));
-    if (result?.success) {
-      navigate(result.demo?.dashboardPath || "/bidder-dashboard", { replace: true });
     }
   };
 
@@ -194,29 +186,25 @@ const Login = () => {
             )}
           </div>
 
-          {demoEnabled && (
-            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-bold text-amber-950">
-                    Not ready to sign up?
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-amber-800">
-                    Explore bidder, auctioneer, and admin workflows in a 24-hour sandbox.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleStartDemo}
-                  disabled={loading}
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-amber-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <PlayCircle className="h-5 w-5" />
-                  {loading ? "Starting..." : "Try Demo"}
-                </button>
+          <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-bold text-amber-950">
+                  Not ready to sign up?
+                </p>
+                <p className="mt-1 text-sm leading-6 text-amber-800">
+                  Explore bidder, auctioneer, and admin workflows in a 24-hour sandbox.
+                </p>
               </div>
+              <Link
+                to="/demo"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-amber-500 px-4 py-2 font-semibold text-slate-950 transition hover:bg-amber-400"
+              >
+                <PlayCircle className="h-5 w-5" />
+                Try Demo
+              </Link>
             </div>
-          )}
+          </div>
 
           <p className="mt-8 text-center text-sm text-slate-600">
             New to PrimeBid?{" "}

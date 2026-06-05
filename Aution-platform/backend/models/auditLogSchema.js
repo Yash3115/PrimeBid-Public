@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const auditLogSchema = new mongoose.Schema(
     {
@@ -25,6 +26,6 @@ const auditLogSchema = new mongoose.Schema(
 
 auditLogSchema.plugin(demoScopedModel);
 
-const AuditLog = mongoose.model("AuditLog", auditLogSchema);
+const AuditLog = createScopedModel("AuditLog", auditLogSchema);
 
 export default AuditLog;

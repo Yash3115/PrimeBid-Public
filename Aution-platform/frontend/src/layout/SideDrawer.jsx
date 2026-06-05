@@ -6,7 +6,7 @@ import { GiHamburgerMenu } from "react-icons/gi";
 import { RiAuctionFill } from "react-icons/ri";
 import { MdLeaderboard } from "react-icons/md";
 import { ArrowDownToLine, ArrowUpFromLine, Gavel, ShieldCheck, X } from "lucide-react";
-import { exitDemo, startDemo } from "@/store/slices/userSlice";
+import { exitDemo } from "@/store/slices/userSlice";
 import {
   BiBarChartSquare,
   BiBell,
@@ -31,7 +31,6 @@ const roleLinkBase =
   "inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition";
 
 const SideDrawer = () => {
-  const demoEnabled = import.meta.env.VITE_DEMO_MODE_ENABLED !== "false";
   const [show, setShow] = useState(false);
   const location = useLocation();
   const dispatch = useDispatch();
@@ -95,13 +94,6 @@ const SideDrawer = () => {
   const handleExitDemo = async () => {
     await dispatch(exitDemo());
     navigate("/", { replace: true });
-  };
-
-  const handleStartDemo = async () => {
-    const result = await dispatch(startDemo("Bidder"));
-    if (result?.success) {
-      navigate(result.demo?.dashboardPath || "/bidder-dashboard");
-    }
   };
 
   return (
@@ -341,15 +333,12 @@ const SideDrawer = () => {
               <Link to="/sign-up" className={getNavClass("/sign-up")}>
                 <BiUserPlus /> Sign Up
               </Link>
-              {demoEnabled && (
-                <button
-                  type="button"
-                  onClick={handleStartDemo}
-                  className={`${navLinkBase} text-left text-amber-800 hover:bg-amber-50 hover:text-amber-900`}
-                >
-                  <RiAuctionFill /> Try Demo
-                </button>
-              )}
+              <Link
+                to="/demo"
+                className={`${navLinkBase} text-left text-amber-800 hover:bg-amber-50 hover:text-amber-900`}
+              >
+                <RiAuctionFill /> Try Demo
+              </Link>
             </div>
           )}
 

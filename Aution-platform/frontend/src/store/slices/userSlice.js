@@ -1,7 +1,14 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { toast } from "react-toastify";
 import { api, getErrorMessage, toastApiError } from "@/lib/api";
-import { clearAuthToken, getAuthToken, setAuthToken } from "@/lib/authToken";
+import {
+  AUTH_MODES,
+  clearAuthToken,
+  getActiveAuthMode,
+  getAuthToken,
+  setActiveAuthMode,
+  setAuthToken,
+} from "@/lib/authToken";
 import {
   clearDemoConversion,
   getDemoConversion,
@@ -13,6 +20,7 @@ const userSlice = createSlice({
   name: "user",
   initialState: {
     loading: false,
+    activeMode: getActiveAuthMode(),
     authChecked: false,
     isAuthenticated: false,
     authenticatedAt: null,
@@ -32,6 +40,7 @@ const userSlice = createSlice({
     },
     registerSuccess(state, action) {
       state.loading = false;
+      state.activeMode = action.payload.activeMode || AUTH_MODES.PRODUCTION;
       state.authChecked = true;
       state.isAuthenticated = true;
       state.authenticatedAt = action.payload.authenticatedAt;
@@ -51,6 +60,7 @@ const userSlice = createSlice({
     },
     loginSuccess(state, action) {
       state.loading = false;
+      state.activeMode = action.payload.activeMode || getActiveAuthMode();
       state.authChecked = true;
       state.isAuthenticated = true;
       state.authenticatedAt = action.payload.authenticatedAt;
@@ -69,6 +79,7 @@ const userSlice = createSlice({
     },
     fetchUserSuccess(state, action) {
       state.loading = false;
+      state.activeMode = action.payload.activeMode || getActiveAuthMode();
       state.authChecked = true;
       state.isAuthenticated = true;
       state.authenticatedAt = action.payload.authenticatedAt;
@@ -82,8 +93,9 @@ const userSlice = createSlice({
       state.user = {};
     },
 
-    logoutSuccess(state) {
+    logoutSuccess(state, action) {
       state.loading = false;
+      state.activeMode = action.payload?.activeMode || getActiveAuthMode();
       state.isAuthenticated = false;
       state.authChecked = true;
       state.authenticatedAt = null;
@@ -94,8 +106,9 @@ const userSlice = createSlice({
       state.notifications = [];
       state.unreadNotifications = 0;
     },
-    sessionExpired(state) {
+    sessionExpired(state, action) {
       state.loading = false;
+      state.activeMode = action.payload?.activeMode || getActiveAuthMode();
       state.authChecked = true;
       state.isAuthenticated = false;
       state.authenticatedAt = null;
@@ -166,10 +179,12 @@ export const register = (data) => async (dispatch) => {
         headers: { "Content-Type": "multipart/form-data" },
       }
     );
-    setAuthToken(response.data.token);
+    setActiveAuthMode(AUTH_MODES.PRODUCTION);
+    setAuthToken(response.data.token, AUTH_MODES.PRODUCTION);
     dispatch(
       userSlice.actions.registerSuccess({
         ...response.data,
+        activeMode: AUTH_MODES.PRODUCTION,
         authenticatedAt: Date.now(),
       })
     );
@@ -194,10 +209,12 @@ export const login = (data) => async (dispatch) => {
         headers: { "Content-Type": "application/json" },
       }
     );
-    setAuthToken(response.data.token);
+    setActiveAuthMode(AUTH_MODES.PRODUCTION);
+    setAuthToken(response.data.token, AUTH_MODES.PRODUCTION);
     dispatch(
       userSlice.actions.loginSuccess({
         ...response.data,
+        activeMode: AUTH_MODES.PRODUCTION,
         authenticatedAt: Date.now(),
       })
     );
@@ -218,10 +235,12 @@ export const googleLogin = (data) => async (dispatch) => {
     const response = await api.post("/user/google-login", data, {
       headers: { "Content-Type": "application/json" },
     });
-    setAuthToken(response.data.token);
+    setActiveAuthMode(AUTH_MODES.PRODUCTION);
+    setAuthToken(response.data.token, AUTH_MODES.PRODUCTION);
     dispatch(
       userSlice.actions.loginSuccess({
         ...response.data,
+        activeMode: AUTH_MODES.PRODUCTION,
         authenticatedAt: Date.now(),
       })
     );
@@ -239,9 +258,11 @@ export const googleLogin = (data) => async (dispatch) => {
 export const logout = () => async (dispatch) => {
   try {
     const response = await api.get("/user/logout");
-    clearAuthToken();
+    const activeMode = getActiveAuthMode();
+    clearAuthToken(activeMode);
+    const nextMode = setActiveAuthMode(AUTH_MODES.PRODUCTION);
     clearDemoConversion();
-    dispatch(userSlice.actions.logoutSuccess());
+    dispatch(userSlice.actions.logoutSuccess({ activeMode: nextMode }));
     dispatch(resetWallet());
     toast.success(response.data.message);
     dispatch(userSlice.actions.clearAllErrors());
@@ -255,7 +276,8 @@ export const logout = () => async (dispatch) => {
 };
 
 export const fetchUser = () => async (dispatch, getState) => {
-  if (!getAuthToken()) {
+  const activeMode = getActiveAuthMode();
+  if (!getAuthToken(activeMode)) {
     dispatch(userSlice.actions.fetchUserFailed());
     return;
   }
@@ -266,6 +288,7 @@ export const fetchUser = () => async (dispatch, getState) => {
     dispatch(
       userSlice.actions.fetchUserSuccess({
         user: response.data.user,
+        activeMode,
         authenticatedAt: Date.now(),
       })
     );
@@ -303,7 +326,8 @@ export const startDemo = (persona = "Bidder") => async (dispatch) => {
         headers: { "Content-Type": "application/json" },
       }
     );
-    setAuthToken(response.data.token);
+    setActiveAuthMode(AUTH_MODES.DEMO);
+    setAuthToken(response.data.token, AUTH_MODES.DEMO);
     setDemoConversion({
       conversionToken: response.data.conversionToken,
       demoSessionId: response.data.demo?.sessionId,
@@ -312,6 +336,7 @@ export const startDemo = (persona = "Bidder") => async (dispatch) => {
     dispatch(
       userSlice.actions.loginSuccess({
         user: response.data.user,
+        activeMode: AUTH_MODES.DEMO,
         authenticatedAt: Date.now(),
       })
     );
@@ -339,7 +364,8 @@ export const switchDemoPersona = (persona) => async (dispatch) => {
         headers: { "Content-Type": "application/json" },
       }
     );
-    setAuthToken(response.data.token);
+    setActiveAuthMode(AUTH_MODES.DEMO);
+    setAuthToken(response.data.token, AUTH_MODES.DEMO);
     setDemoConversion({
       ...getDemoConversion(),
       demoSessionId: response.data.demo?.sessionId,
@@ -348,6 +374,7 @@ export const switchDemoPersona = (persona) => async (dispatch) => {
     dispatch(
       userSlice.actions.loginSuccess({
         user: response.data.user,
+        activeMode: AUTH_MODES.DEMO,
         authenticatedAt: Date.now(),
       })
     );
@@ -366,17 +393,33 @@ export const switchDemoPersona = (persona) => async (dispatch) => {
 export const exitDemo = () => async (dispatch) => {
   try {
     const response = await api.delete("/demo/session");
-    clearAuthToken();
+    clearAuthToken(AUTH_MODES.DEMO);
     clearDemoConversion();
-    dispatch(userSlice.actions.logoutSuccess());
+    const hasProductionSession = Boolean(getAuthToken(AUTH_MODES.PRODUCTION));
+    setActiveAuthMode(AUTH_MODES.PRODUCTION);
+    dispatch(userSlice.actions.logoutSuccess({ activeMode: AUTH_MODES.PRODUCTION }));
     dispatch(resetWallet());
+    if (hasProductionSession) {
+      await dispatch(fetchUser());
+      await dispatch(fetchWatchlist());
+      await dispatch(fetchNotifications());
+      await dispatch(fetchWallet());
+    }
     toast.success(response.data.message);
     return response.data;
   } catch (error) {
-    clearAuthToken();
+    clearAuthToken(AUTH_MODES.DEMO);
     clearDemoConversion();
-    dispatch(userSlice.actions.logoutSuccess());
+    const hasProductionSession = Boolean(getAuthToken(AUTH_MODES.PRODUCTION));
+    setActiveAuthMode(AUTH_MODES.PRODUCTION);
+    dispatch(userSlice.actions.logoutSuccess({ activeMode: AUTH_MODES.PRODUCTION }));
     dispatch(resetWallet());
+    if (hasProductionSession) {
+      await dispatch(fetchUser());
+      await dispatch(fetchWatchlist());
+      await dispatch(fetchNotifications());
+      await dispatch(fetchWallet());
+    }
     toastApiError(error, "Exited Demo Mode locally");
     return { success: false };
   }

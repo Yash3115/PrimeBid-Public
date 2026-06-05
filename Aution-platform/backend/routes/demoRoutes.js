@@ -1,5 +1,9 @@
 import express from "express";
 import { isAuth } from "../middlewares/auth.js";
+import {
+  requireDemoDatabase,
+  requireProductionDatabase,
+} from "../middlewares/database.js";
 import asyncErrorHandler from "../middlewares/asyncErrorHandler.js";
 import {
   clearDemoAuthCookie,
@@ -18,8 +22,8 @@ const router = express.Router();
 const requireDemoMode = (req, res, next) => {
   if (isDemoModeEnabled()) return next();
 
-  const err = new Error("Demo mode is not enabled");
-  err.statusCode = 403;
+  const err = new Error("Demo mode is unavailable because DEMO_MONGODB_URL is not configured");
+  err.statusCode = 503;
   return next(err);
 };
 
@@ -31,15 +35,29 @@ const serializeDemoUser = (user, demoSession, persona) => ({
   demoPersona: persona,
 });
 
+router.get("/status", (req, res) => {
+  const ttlHours = Number(process.env.DEMO_SESSION_TTL_HOURS || 24);
+  return res.status(200).json({
+    success: true,
+    available: isDemoModeEnabled(),
+    ttlHours: Number.isFinite(ttlHours) && ttlHours > 0 ? ttlHours : 24,
+    personas: ["Bidder", "Auctioneer", "Super Admin"],
+    message: isDemoModeEnabled()
+      ? "Demo Mode is available"
+      : "Demo Mode is unavailable until DEMO_MONGODB_URL is configured",
+  });
+});
+
 router.post(
   "/start",
   requireDemoMode,
+  requireDemoDatabase,
   asyncErrorHandler(async (req, res) => {
     const { demoSession, user, persona, conversionToken } = await startDemoSession({
       req,
       persona: req.body?.persona,
     });
-    const token = issueDemoAuthToken({ user, demoSession, res });
+    const token = issueDemoAuthToken({ user, demoSession, persona, res });
 
     return res.status(201).json({
       success: true,
@@ -62,6 +80,7 @@ router.post(
 router.post(
   "/switch",
   requireDemoMode,
+  requireDemoDatabase,
   isAuth,
   asyncErrorHandler(async (req, res, next) => {
     if (!req.isDemo) {
@@ -74,7 +93,7 @@ router.post(
       demoSessionId: req.demoSessionId,
       persona: req.body?.persona,
     });
-    const token = issueDemoAuthToken({ user, demoSession, res });
+    const token = issueDemoAuthToken({ user, demoSession, persona, res });
 
     return res.status(200).json({
       success: true,
@@ -94,6 +113,7 @@ router.post(
 router.delete(
   "/session",
   requireDemoMode,
+  requireDemoDatabase,
   isAuth,
   asyncErrorHandler(async (req, res) => {
     if (req.isDemo && req.demoSessionId) {
@@ -110,6 +130,7 @@ router.delete(
 router.post(
   "/convert-watchlist",
   requireDemoMode,
+  requireProductionDatabase,
   isAuth,
   asyncErrorHandler(async (req, res, next) => {
     if (req.isDemo) {

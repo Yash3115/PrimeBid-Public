@@ -2,19 +2,21 @@ import asyncErrorHandler from "./asyncErrorHandler.js";
 import User from '../models/userSchema.js';
 import DemoSession from "../models/demoSessionSchema.js";
 import jwt from 'jsonwebtoken';
+import { DATABASE_MODES } from "../db/connection.js";
 import {
     clearDemoScope,
     isDemoModeEnabled,
+    setDatabaseMode,
     setDemoScope,
 } from "../utils/demoScope.js";
 
 const getRequestToken = (req) => {
-    if (req.cookies?.token) return req.cookies.token;
-
     const authorization = req.get("authorization") || "";
     if (authorization.toLowerCase().startsWith("bearer ")) {
         return authorization.slice(7).trim();
     }
+
+    if (req.cookies?.token) return req.cookies.token;
 
     return null;
 };
@@ -27,18 +29,21 @@ const isAuth = asyncErrorHandler(async(req,res,next)=>{
         return next(err);
     }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    if (decoded.isDemo) {
+    const tokenIsDemo = decoded.mode === DATABASE_MODES.DEMO || decoded.isDemo;
+    if (tokenIsDemo) {
         if (!isDemoModeEnabled()) {
             const err = new Error("Demo mode is not available");
             err.statusCode = 403;
             return next(err);
         }
+        setDatabaseMode(DATABASE_MODES.DEMO);
         setDemoScope({
             isDemo: true,
             demoSessionId: decoded.demoSessionId,
             demoExpiresAt: decoded.demoExpiresAt,
         });
     } else {
+        setDatabaseMode(DATABASE_MODES.PRODUCTION);
         clearDemoScope();
     }
     req.user = await User.findById(decoded.id);
@@ -47,7 +52,7 @@ const isAuth = asyncErrorHandler(async(req,res,next)=>{
         err.statusCode=401;
         return next(err);
     }
-    if (decoded.isDemo) {
+    if (tokenIsDemo) {
         const tokenSessionId = decoded.demoSessionId?.toString?.() || String(decoded.demoSessionId || "");
         const userSessionId = req.user.demoSessionId?.toString?.() || "";
         const tokenExpiry = decoded.demoExpiresAt ? new Date(decoded.demoExpiresAt) : null;
@@ -75,6 +80,7 @@ const isAuth = asyncErrorHandler(async(req,res,next)=>{
         req.isDemo = true;
         req.demoSessionId = demoSession._id;
         req.demoExpiresAt = demoSession.expiresAt;
+        req.demoPersona = decoded.demoPersona || req.user.role;
     } else if (req.user.isDemo) {
         const err = new Error("Demo users must use a demo session token");
         err.statusCode=401;
@@ -97,22 +103,25 @@ const optionalAuth = asyncErrorHandler(async(req,res,next)=>{
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (decoded.isDemo) {
+        const tokenIsDemo = decoded.mode === DATABASE_MODES.DEMO || decoded.isDemo;
+        if (tokenIsDemo) {
             if (!isDemoModeEnabled()) {
                 clearDemoScope();
                 return next();
             }
+            setDatabaseMode(DATABASE_MODES.DEMO);
             setDemoScope({
                 isDemo: true,
                 demoSessionId: decoded.demoSessionId,
                 demoExpiresAt: decoded.demoExpiresAt,
             });
         } else {
+            setDatabaseMode(DATABASE_MODES.PRODUCTION);
             clearDemoScope();
         }
         const user = await User.findById(decoded.id);
         if(user && user.accountStatus !== "Paused"){
-            if (decoded.isDemo) {
+            if (tokenIsDemo) {
                 const tokenSessionId = decoded.demoSessionId?.toString?.() || String(decoded.demoSessionId || "");
                 const userSessionId = user.demoSessionId?.toString?.() || "";
                 const demoSession = tokenSessionId
@@ -127,6 +136,7 @@ const optionalAuth = asyncErrorHandler(async(req,res,next)=>{
                     req.isDemo = true;
                     req.demoSessionId = demoSession._id;
                     req.demoExpiresAt = demoSession.expiresAt;
+                    req.demoPersona = decoded.demoPersona || user.role;
                 } else {
                     clearDemoScope();
                 }

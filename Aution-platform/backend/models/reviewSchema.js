@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const reviewSchema = new mongoose.Schema(
     {
@@ -38,6 +39,6 @@ reviewSchema.plugin(demoScopedModel);
 reviewSchema.index({ auction: 1, reviewer: 1 }, { unique: true });
 reviewSchema.index({ seller: 1, createdAt: -1 });
 
-const Review = mongoose.model("Review", reviewSchema);
+const Review = createScopedModel("Review", reviewSchema);
 
 export default Review;

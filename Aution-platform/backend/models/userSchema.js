@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { demoScopedModel } from "./plugins/demoScopedModel.js";
+import { createScopedModel } from "./plugins/createScopedModel.js";
 
 const userSchema = new mongoose.Schema({
     userName:{
@@ -203,6 +204,6 @@ userSchema.index(
     }
 );
 
-const User = mongoose.model("User",userSchema);
+const User = createScopedModel("User", userSchema);
 
 export default User;
