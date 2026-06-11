@@ -17,7 +17,7 @@ const getModel = (modelName) => {
   try {
     connection = getScopedConnection();
   } catch (error) {
-    if (!/MONGODB_URL is not configured|DEMO_MONGODB_URL is not configured/i.test(error.message || "")) {
+    if (!/MONGODB_URL is not configured/i.test(error.message || "")) {
       throw error;
     }
     connection = offlineConnection;

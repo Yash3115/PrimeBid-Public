@@ -7,7 +7,6 @@ const platformAccountSchema = new mongoose.Schema(
         key: {
             type: String,
             default: "primary",
-            unique: true,
             immutable: true,
         },
         availableBalance: {
@@ -35,6 +34,10 @@ const platformAccountSchema = new mongoose.Schema(
 );
 
 platformAccountSchema.plugin(demoScopedModel);
+platformAccountSchema.index(
+    { key: 1, isDemo: 1, demoSessionId: 1 },
+    { unique: true }
+);
 
 const PlatformAccount = createScopedModel(
     "PlatformAccount",

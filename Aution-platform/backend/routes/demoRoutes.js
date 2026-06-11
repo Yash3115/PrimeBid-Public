@@ -22,7 +22,7 @@ const router = express.Router();
 const requireDemoMode = (req, res, next) => {
   if (isDemoModeEnabled()) return next();
 
-  const err = new Error("Demo mode is unavailable because DEMO_MONGODB_URL is not configured");
+  const err = new Error("Demo mode is unavailable because MONGODB_URL is not configured");
   err.statusCode = 503;
   return next(err);
 };
@@ -44,7 +44,7 @@ router.get("/status", (req, res) => {
     personas: ["Bidder", "Auctioneer", "Super Admin"],
     message: isDemoModeEnabled()
       ? "Demo Mode is available"
-      : "Demo Mode is unavailable until DEMO_MONGODB_URL is configured",
+      : "Demo Mode is unavailable until MONGODB_URL is configured",
   });
 });
 

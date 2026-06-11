@@ -7,6 +7,7 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "migrate:kyc": "node scripts/backfillKycCompatibility.js",
+    "demo:ttl-indexes": "node scripts/ensureSharedDemoIndexes.js",
     "seed:admin": "node scripts/ensureAdminUser.js",
     "seed:demo": "node scripts/seedDemoUsers.js",
     "test": "node --test tests/*.test.js"

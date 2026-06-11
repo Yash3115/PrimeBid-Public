@@ -130,7 +130,17 @@ export const clearDemoAuthCookie = (res) => {
   res.cookie("demoToken", null, getCookieOptions(new Date(Date.now())));
 };
 
-const buildPhone = () => `8${crypto.randomInt(100000000, 999999999)}`;
+const buildPhone = (seed, attempt = 0) => {
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${seed}:${attempt}`)
+    .digest();
+  const number = digest.readUInt32BE(0) % 1000000000;
+  return `8${String(number).padStart(9, "0")}`;
+};
+
+const isDuplicatePhoneError = (error) =>
+  error?.code === 11000 && Boolean(error?.keyPattern?.phone);
 
 const createDemoUser = async ({
   sessionId,
@@ -142,32 +152,40 @@ const createDemoUser = async ({
   reputation,
 }) => {
   const password = await bcrypt.hash(crypto.randomBytes(18).toString("hex"), 10);
-  return User.create({
-    userName,
-    email: `demo-${suffix}-${sessionId}@primebid.local`,
-    password,
-    address: "PrimeBid demo sandbox",
-    phone: buildPhone(),
-    role,
-    accountStatus: "Active",
-    kycStatus,
-    reputation,
-    wallet,
-    paymentMethods:
-      role === DEMO_PERSONAS.AUCTIONEER
-        ? {
-            bankTransfer: {
-              bankAccountName: userName,
-              bankAccountNumber: `DEMO${String(sessionId).slice(-8).toUpperCase()}${suffix
-                .slice(0, 2)
-                .toUpperCase()}`,
-              bankIFSCCode: "DEMO0001234",
-              bankName: "Demo Bank",
-            },
-          }
-        : undefined,
-    profileImage: demoImage(`${suffix}-avatar`),
-  });
+  const phoneSeed = `${sessionId}:${suffix}`;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await User.create({
+        userName,
+        email: `demo-${suffix}-${sessionId}@primebid.local`,
+        password,
+        address: "PrimeBid demo sandbox",
+        phone: buildPhone(phoneSeed, attempt),
+        role,
+        accountStatus: "Active",
+        kycStatus,
+        reputation,
+        wallet,
+        paymentMethods:
+          role === DEMO_PERSONAS.AUCTIONEER
+            ? {
+                bankTransfer: {
+                  bankAccountName: userName,
+                  bankAccountNumber: `DEMO${String(sessionId).slice(-8).toUpperCase()}${suffix
+                    .slice(0, 2)
+                    .toUpperCase()}`,
+                  bankIFSCCode: "DEMO0001234",
+                  bankName: "Demo Bank",
+                },
+              }
+            : undefined,
+        profileImage: demoImage(`${suffix}-avatar`),
+      });
+    } catch (error) {
+      if (isDuplicatePhoneError(error) && attempt < 4) continue;
+      throw error;
+    }
+  }
 };
 
 const createBid = async ({ auction, user, amount, lockedAmount = 0, isAutoBid = false }) => {
@@ -793,7 +811,7 @@ export const cleanupExpiredDemoSessions = async ({ now = new Date() } = {}) => {
     return {
       expiredSessionCount: 0,
       deletionResults: {},
-      skipped: "Demo database is not configured",
+      skipped: "Demo mode is not enabled",
     };
   }
 
@@ -809,13 +827,15 @@ export const cleanupExpiredDemoSessions = async ({ now = new Date() } = {}) => {
     const sessionIds = expiredSessions.map((session) => session._id);
 
     const deletionResults = {};
-    if (sessionIds.length) {
-      for (const Model of demoModels) {
-        deletionResults[Model.modelName] = await Model.deleteMany({
-          isDemo: true,
-          demoSessionId: { $in: sessionIds },
-        });
-      }
+    const expiredDocumentFilter = {
+      isDemo: true,
+      $or: [
+        { demoExpiresAt: { $lte: now } },
+        ...(sessionIds.length ? [{ demoSessionId: { $in: sessionIds } }] : []),
+      ],
+    };
+    for (const Model of demoModels) {
+      deletionResults[Model.modelName] = await Model.deleteMany(expiredDocumentFilter);
     }
 
     await DemoSession.updateMany(

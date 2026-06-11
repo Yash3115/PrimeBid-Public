@@ -78,7 +78,7 @@ export const demoScopedModel = (schema) => {
   });
 
   schema.index({ isDemo: 1, demoSessionId: 1 });
-  schema.index({ demoExpiresAt: 1 });
+  schema.index({ demoExpiresAt: 1 }, { expireAfterSeconds: 0 });
 
   schema.pre("validate", function addDemoMetadataBeforeValidate(next) {
     attachDemoMetadata(this);

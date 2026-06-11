@@ -73,7 +73,6 @@ Set these for the backend service:
 ```bash
 NODE_ENV=production
 MONGODB_URL=mongodb+srv://...
-DEMO_MONGODB_URL=mongodb+srv://.../primebid_demo
 JWT_SECRET=replace-with-a-long-random-secret
 COOKIE_EXPIRE=7
 COOKIE_SECURE=true
@@ -110,7 +109,8 @@ Notes:
 - Email delivery is used for auction-winner emails. Use either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT`. If `SMTP_HOST` is set, the backend uses host/port and ignores the service shortcut.
 - Common SMTP ports: `465` means SSL/TLS (`SMTP_SECURE=true`), while `587` means STARTTLS (`SMTP_SECURE=false`). Gmail typically requires an app password, not your normal password.
 - `ADMIN_SEED_*` variables are only used when running `npm run seed:admin`; the API does not create a default admin during normal startup.
-- Demo Mode runs alongside production when `DEMO_MONGODB_URL` is configured. It uses a separate MongoDB database, keeps per-visitor demo sessions isolated, and removes expired demo data by TTL/cron cleanup.
+- Demo Mode runs alongside production when `MONGODB_URL` is configured. Demo records live in the same MongoDB database as production records, are isolated by demo session metadata, and are removed by TTL/cron cleanup.
+- After deploying the shared demo database model to an existing MongoDB database, run `npm run demo:ttl-indexes` once from the backend service context to replace legacy demo indexes.
 - Set `DEMO_DISABLED=true` only when you need to hide/disable demo startup temporarily.
 
 ## Frontend Environment Variables
@@ -129,7 +129,7 @@ If the frontend and backend are deployed behind the same domain with `/api/v1` r
 
 The EmailJS variables power the frontend Contact form. Configure the EmailJS service/template to accept the same template fields used by the app: `name`, `email`, `phone`, `subject`, and `message`.
 
-The `/demo` page and Try Demo links are available without a frontend env toggle. If the backend has no `DEMO_MONGODB_URL`, the demo page shows an unavailable state instead of changing production behavior.
+The `/demo` page and Try Demo links are available without a frontend env toggle. If the backend has no `MONGODB_URL`, or `DEMO_DISABLED=true`, the demo page shows an unavailable state instead of changing production behavior.
 
 ## Vercel Deployment
 
@@ -215,6 +215,6 @@ Then verify from the frontend:
 - Auction does not settle after ending: run `/api/v1/cron/all` with the `Authorization` header and check backend logs.
 - Winner email does not send: verify `SMTP_MAIL`, `SMTP_PASSWORD`, and either `SMTP_SERVICE` or `SMTP_HOST + SMTP_PORT` in the backend environment.
 - Contact form does not send: verify `VITE_EMAILJS_SERVICE_ID`, `VITE_EMAILJS_TEMPLATE_ID`, and `VITE_EMAILJS_PUBLIC_KEY` in the frontend environment, then rebuild/redeploy the frontend.
-- Demo Mode page says unavailable: set backend `DEMO_MONGODB_URL`, confirm `JWT_SECRET` is present, keep `DEMO_DISABLED` unset or `false`, then redeploy the backend.
+- Demo Mode page says unavailable: set backend `MONGODB_URL`, confirm `JWT_SECRET` is present, keep `DEMO_DISABLED` unset or `false`, then redeploy the backend.
 - Frontend refresh returns 404: confirm Vercel rewrites or Netlify redirects are active.
 - MongoDB connection fails: confirm the Atlas connection string, database user password, and Atlas network access settings.

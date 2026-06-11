@@ -45,12 +45,12 @@ export const requireDatabaseConnection =
       next();
     } catch (error) {
       console.error(
-        `${mode === DATABASE_MODES.DEMO ? "Demo database" : "Database"} unavailable for request:`,
+        `${mode === DATABASE_MODES.DEMO ? "Demo data store" : "Database"} unavailable for request:`,
         error.message
       );
       const err = new Error(
         mode === DATABASE_MODES.DEMO
-          ? "Demo database is temporarily unavailable. Please try again later."
+          ? "Demo data is temporarily unavailable. Please try again later."
           : "Database temporarily unavailable. Please try again later."
       );
       err.statusCode = 503;
@@ -69,12 +69,12 @@ export const forceDatabaseConnection =
       next();
     } catch (error) {
       console.error(
-        `${normalizedMode === DATABASE_MODES.DEMO ? "Demo database" : "Database"} unavailable for request:`,
+        `${normalizedMode === DATABASE_MODES.DEMO ? "Demo data store" : "Database"} unavailable for request:`,
         error.message
       );
       const err = new Error(
         normalizedMode === DATABASE_MODES.DEMO
-          ? "Demo database is temporarily unavailable. Please try again later."
+          ? "Demo data is temporarily unavailable. Please try again later."
           : "Database temporarily unavailable. Please try again later."
       );
       err.statusCode = 503;
@@ -88,7 +88,7 @@ export const requireProductionDatabase = forceDatabaseConnection(
 
 export const requireDemoDatabase = (req, res, next) => {
   if (!isDemoDatabaseAvailable()) {
-    const err = new Error("Demo mode is unavailable because DEMO_MONGODB_URL is not configured");
+    const err = new Error("Demo mode is unavailable because MONGODB_URL is not configured");
     err.statusCode = 503;
     return next(err);
   }

@@ -101,9 +101,9 @@ const Demo = () => {
                 Try PrimeBid without touching live data.
               </h1>
               <p className="mt-3 max-w-3xl leading-7 text-slate-300">
-                Demo Mode runs on a separate sandbox database. You can bid,
-                create auctions, and review admin queues with sample data that
-                resets automatically.
+                Demo Mode runs on isolated sandbox records in the shared
+                database. You can bid, create auctions, and review admin queues
+                with sample data that resets automatically.
               </p>
             </div>
             <Link
